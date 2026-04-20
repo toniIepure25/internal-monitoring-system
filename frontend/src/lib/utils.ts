@@ -12,27 +12,27 @@ export function formatDate(dateStr: string): string {
 export function getStatusColor(status: string): string {
   switch (status) {
     case "UP":
-      return "text-green-700 bg-green-50 border-green-200";
+      return "text-success bg-success/10";
     case "DOWN":
-      return "text-red-700 bg-red-50 border-red-200";
+      return "text-danger bg-danger/10";
     case "DEGRADED":
-      return "text-yellow-700 bg-yellow-50 border-yellow-200";
+      return "text-warning bg-warning/10";
     case "SLOW":
-      return "text-orange-700 bg-orange-50 border-orange-200";
+      return "text-warning bg-warning/10";
     default:
-      return "text-gray-700 bg-gray-50 border-gray-200";
+      return "text-fgMuted bg-fgSubtle/10";
   }
 }
 
 export function getSeverityColor(severity: string): string {
   switch (severity) {
     case "CRITICAL":
-      return "text-red-700 bg-red-50";
+      return "text-danger bg-danger/10";
     case "WARNING":
-      return "text-yellow-700 bg-yellow-50";
+      return "text-warning bg-warning/10";
     case "INFO":
-      return "text-blue-700 bg-blue-50";
+      return "text-accent bg-accent/10";
     default:
-      return "text-gray-700 bg-gray-50";
+      return "text-fgMuted bg-fgSubtle/10";
   }
 }

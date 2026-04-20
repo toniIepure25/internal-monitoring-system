@@ -1,149 +1,94 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
-import { api } from "@/lib/api";
-import { Host } from "@/types";
-import { HostStatusBadge } from "@/components/ui/status-badge";
-import { EmptyState } from "@/components/ui/empty-state";
-import { TableSkeleton } from "@/components/ui/loading-skeleton";
 import { useRouter } from "next/navigation";
 import { AppShell } from "@/components/layout/app-shell";
+import { PageHeader } from "@/components/ui/page-header";
+import { HostStatusBadge } from "@/components/ui/status-badge";
+import { TableSkeleton } from "@/components/ui/loading-skeleton";
+import { EmptyState } from "@/components/ui/empty-state";
+import { DataTableShell, SortableTh, Td, type SortState, toggleSort } from "@/components/ui/data-table-shell";
+import { Pagination } from "@/components/ui/pagination";
+import { Button } from "@/components/ui/button";
+import { PageTransition } from "@/components/ui/motion";
+import { api } from "@/lib/api";
+import { formatDate } from "@/lib/utils";
+import type { Host } from "@/types";
+
+const PAGE_SIZE = 20;
 
 export default function HostsPage() {
   const [hosts, setHosts] = useState<Host[]>([]);
   const [total, setTotal] = useState(0);
-  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [sort, setSort] = useState<SortState | null>(null);
+  const [page, setPage] = useState(1);
   const router = useRouter();
 
-  useEffect(() => {
-    loadHosts();
-    const interval = window.setInterval(loadHosts, 10000);
-    return () => window.clearInterval(interval);
-  }, []);
-
-  async function loadHosts() {
-    try {
-      const params = search ? `?search=${encodeURIComponent(search)}` : "";
-      const data = await api.get<{ items: Host[]; total: number }>(`/api/hosts${params}`);
-      setHosts(data.items);
-      setTotal(data.total);
-    } catch (e) {
-      console.error("Failed to load hosts", e);
-    } finally {
-      setLoading(false);
-    }
+  async function load() {
+    try { const qs = search ? `?search=${encodeURIComponent(search)}` : ""; const res = await api.get<{ items: Host[]; total: number }>(`/api/hosts${qs}`); setHosts(res.items); setTotal(res.total); } catch { /* noop */ }
+    setLoading(false);
   }
 
-  function formatTime(iso: string | null | undefined): string {
-    if (!iso) return "Never";
-    const d = new Date(iso);
-    return d.toLocaleString();
-  }
+  useEffect(() => { load(); const i = window.setInterval(load, 10000); return () => window.clearInterval(i); }, []);
 
-  function formatUptime(seconds: number | null | undefined): string {
-    if (!seconds) return "-";
-    const days = Math.floor(seconds / 86400);
-    const hours = Math.floor((seconds % 86400) / 3600);
-    if (days > 0) return `${days}d ${hours}h`;
-    const mins = Math.floor((seconds % 3600) / 60);
-    return `${hours}h ${mins}m`;
-  }
+  const sorted = useMemo(() => {
+    if (!sort) return hosts;
+    return [...hosts].sort((a, b) => {
+      let va: string = "", vb: string = "";
+      switch (sort.key) {
+        case "name": va = a.display_name.toLowerCase(); vb = b.display_name.toLowerCase(); break;
+        case "hostname": va = a.hostname; vb = b.hostname; break;
+        case "status": va = a.status?.status || ""; vb = b.status?.status || ""; break;
+        case "heartbeat": va = a.status?.last_heartbeat_at || ""; vb = b.status?.last_heartbeat_at || ""; break;
+      }
+      if (va < vb) return sort.dir === "asc" ? -1 : 1;
+      if (va > vb) return sort.dir === "asc" ? 1 : -1;
+      return 0;
+    });
+  }, [hosts, sort]);
+
+  const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
+  const clamped = Math.min(page, totalPages);
+  const paginated = sorted.slice((clamped - 1) * PAGE_SIZE, clamped * PAGE_SIZE);
 
   return (
     <AppShell>
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Hosts</h1>
-          <p className="mt-1 text-sm text-gray-500">Monitored machines and their status</p>
+      <PageTransition>
+        <PageHeader eyebrow="Infrastructure" title="Hosts" description={`${total} registered hosts`} actions={<Button onClick={() => router.push("/hosts/new")}>Register host</Button>} />
+        <div className="mt-4 mb-3 flex items-center gap-2">
+          <input type="text" placeholder="Search hosts…" value={search} onChange={(e) => setSearch(e.target.value)} onKeyDown={(e) => e.key === "Enter" && load()} className="filter-input max-w-xs" />
+          <Button variant="secondary" onClick={load}>Search</Button>
         </div>
-        <Link
-          href="/hosts/new"
-          className="rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white shadow-sm transition hover:bg-blue-700"
-        >
-          Register Host
-        </Link>
-      </div>
-
-      <div className="flex items-center gap-3">
-        <input
-          type="text"
-          placeholder="Search hosts..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && loadHosts()}
-          className="w-full max-w-sm rounded-lg border border-gray-300 px-3 py-2 text-sm placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-        />
-        <button
-          onClick={loadHosts}
-          className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
-        >
-          Search
-        </button>
-      </div>
-
-      {loading ? (
-        <div className="rounded-xl border border-gray-200 bg-white p-6">
-          <TableSkeleton cols={5} rows={4} />
-        </div>
-      ) : hosts.length === 0 ? (
-        <EmptyState
-          title="No hosts registered"
-          description="Register a host to start monitoring machine status and heartbeats."
-          actionLabel="Register Host"
-          onAction={() => router.push("/hosts/new")}
-        />
-      ) : (
-        <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-gray-100 bg-gray-50/50">
-                <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Host</th>
-                <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Status</th>
-                <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Last Heartbeat</th>
-                <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Uptime</th>
-                <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Environment</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {hosts.map((host) => (
-                <tr key={host.id} className="transition hover:bg-gray-50/50">
-                  <td className="px-5 py-4">
-                    <Link href={`/hosts/${host.id}`} className="group">
-                      <p className="text-sm font-semibold text-gray-900 group-hover:text-blue-600">{host.display_name}</p>
-                      <p className="text-xs text-gray-500">{host.hostname}</p>
-                    </Link>
-                  </td>
-                  <td className="px-5 py-4">
-                    <HostStatusBadge status={host.status?.status || "UNKNOWN"} />
-                  </td>
-                  <td className="px-5 py-4 text-sm text-gray-600">
-                    {formatTime(host.status?.last_heartbeat_at)}
-                  </td>
-                  <td className="px-5 py-4 text-sm text-gray-600">
-                    {formatUptime(host.status?.uptime_seconds)}
-                  </td>
-                  <td className="px-5 py-4">
-                    {host.environment ? (
-                      <span className="inline-flex items-center rounded-md bg-gray-100 px-2 py-1 text-xs font-medium text-gray-600">
-                        {host.environment}
-                      </span>
-                    ) : (
-                      <span className="text-sm text-gray-400">-</span>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <div className="border-t border-gray-100 bg-gray-50/50 px-5 py-3 text-xs text-gray-500">
-            {total} host{total !== 1 ? "s" : ""} total
-          </div>
-        </div>
-      )}
-    </div>
+        {loading ? (
+          <DataTableShell><TableSkeleton cols={4} rows={5} /></DataTableShell>
+        ) : hosts.length === 0 ? (
+          <div className="rounded-lg border border-border bg-surface"><EmptyState title="No hosts found" description="Register a host to monitor your infrastructure." actionLabel="Register host" onAction={() => router.push("/hosts/new")} /></div>
+        ) : (
+          <DataTableShell footer={<div className="flex items-center justify-between"><span>Showing {(clamped - 1) * PAGE_SIZE + 1}–{Math.min(clamped * PAGE_SIZE, sorted.length)} of {sorted.length}</span><Pagination page={clamped} totalPages={totalPages} onPageChange={setPage} /></div>}>
+            <table className="w-full min-w-[480px]">
+              <thead><tr className="border-b border-border">
+                <SortableTh sortKey="name" sort={sort} onSort={(k) => setSort(toggleSort(sort, k))}>Name</SortableTh>
+                <SortableTh sortKey="hostname" sort={sort} onSort={(k) => setSort(toggleSort(sort, k))}>Hostname</SortableTh>
+                <SortableTh sortKey="status" sort={sort} onSort={(k) => setSort(toggleSort(sort, k))}>Status</SortableTh>
+                <SortableTh sortKey="heartbeat" sort={sort} onSort={(k) => setSort(toggleSort(sort, k))}>Last heartbeat</SortableTh>
+              </tr></thead>
+              <tbody className="divide-y divide-border">
+                {paginated.map((h) => (
+                  <tr key={h.id} className="transition-colors hover:bg-surfaceRaised/40">
+                    <Td><Link href={`/hosts/${h.id}`} className="font-medium text-fg hover:text-accent">{h.display_name}</Link></Td>
+                    <Td className="text-fgMuted">{h.hostname}</Td>
+                    <Td><HostStatusBadge status={h.status?.status || "UNKNOWN"} /></Td>
+                    <Td className="text-fgMuted">{h.status?.last_heartbeat_at ? formatDate(h.status.last_heartbeat_at) : "—"}</Td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </DataTableShell>
+        )}
+      </PageTransition>
     </AppShell>
   );
 }

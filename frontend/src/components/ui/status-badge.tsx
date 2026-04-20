@@ -1,84 +1,66 @@
 "use client";
 
-const appStatusStyles: Record<string, string> = {
-  UP: "bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-200",
-  DOWN: "bg-rose-50 text-rose-700 ring-1 ring-inset ring-rose-200",
-  DEGRADED: "bg-amber-50 text-amber-700 ring-1 ring-inset ring-amber-200",
-  SLOW: "bg-orange-50 text-orange-700 ring-1 ring-inset ring-orange-200",
-  UNKNOWN: "bg-slate-100 text-slate-600 ring-1 ring-inset ring-slate-200",
+import { cn } from "@/lib/utils";
+
+type StatusVariant = "success" | "danger" | "warning" | "neutral" | "info";
+
+const variantStyles: Record<StatusVariant, string> = {
+  success: "bg-success/10 text-success",
+  danger:  "bg-danger/10 text-danger",
+  warning: "bg-warning/10 text-warning",
+  neutral: "bg-fgSubtle/10 text-fgMuted",
+  info:    "bg-accent/10 text-accent",
 };
 
-const appStatusDots: Record<string, string> = {
-  UP: "bg-green-500",
-  DOWN: "bg-red-500",
-  DEGRADED: "bg-yellow-500",
-  SLOW: "bg-orange-500",
-  UNKNOWN: "bg-gray-400",
+const dotColors: Record<StatusVariant, string> = {
+  success: "bg-success",
+  danger:  "bg-danger",
+  warning: "bg-warning",
+  neutral: "bg-fgSubtle",
+  info:    "bg-accent",
 };
 
-export function StatusBadge({ status }: { status: string }) {
-  const style = appStatusStyles[status] || appStatusStyles.UNKNOWN;
-  const dot = appStatusDots[status] || appStatusDots.UNKNOWN;
+function Badge({ variant, label, className }: { variant: StatusVariant; label: string; className?: string }) {
   return (
-    <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ${style}`}>
-      <span className={`h-1.5 w-1.5 rounded-full ${dot}`} />
-      {status}
-    </span>
-  );
-}
-
-const hostStatusStyles: Record<string, string> = {
-  ONLINE: "bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-200",
-  OFFLINE: "bg-rose-50 text-rose-700 ring-1 ring-inset ring-rose-200",
-  DEGRADED: "bg-amber-50 text-amber-700 ring-1 ring-inset ring-amber-200",
-  UNKNOWN: "bg-slate-100 text-slate-600 ring-1 ring-inset ring-slate-200",
-};
-
-const hostStatusDots: Record<string, string> = {
-  ONLINE: "bg-green-500",
-  OFFLINE: "bg-red-500",
-  DEGRADED: "bg-yellow-500",
-  UNKNOWN: "bg-gray-400",
-};
-
-export function HostStatusBadge({ status }: { status: string }) {
-  const style = hostStatusStyles[status] || hostStatusStyles.UNKNOWN;
-  const dot = hostStatusDots[status] || hostStatusDots.UNKNOWN;
-  return (
-    <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ${style}`}>
-      <span className={`h-1.5 w-1.5 rounded-full ${dot}`} />
-      {status}
-    </span>
-  );
-}
-
-const severityStyles: Record<string, string> = {
-  CRITICAL: "bg-rose-50 text-rose-700 ring-1 ring-inset ring-rose-200",
-  WARNING: "bg-amber-50 text-amber-700 ring-1 ring-inset ring-amber-200",
-  INFO: "bg-sky-50 text-sky-700 ring-1 ring-inset ring-sky-200",
-};
-
-export function SeverityBadge({ severity }: { severity: string }) {
-  const style = severityStyles[severity] || severityStyles.INFO;
-  return (
-    <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ${style}`}>
-      {severity}
-    </span>
-  );
-}
-
-const incidentTypeStyles: Record<string, string> = {
-  APPLICATION: "bg-sky-50 text-sky-700 ring-1 ring-inset ring-sky-200",
-  HOST: "bg-violet-50 text-violet-700 ring-1 ring-inset ring-violet-200",
-  HOST_CAUSED: "bg-rose-50 text-rose-700 ring-1 ring-inset ring-rose-200",
-};
-
-export function IncidentTypeBadge({ type }: { type: string }) {
-  const style = incidentTypeStyles[type] || incidentTypeStyles.APPLICATION;
-  const label = type === "HOST_CAUSED" ? "Host-Caused" : type === "HOST" ? "Host" : "App";
-  return (
-    <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${style}`}>
+    <span className={cn("inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-medium", variantStyles[variant], className)}>
+      <span className={cn("h-1.5 w-1.5 rounded-full", dotColors[variant])} />
       {label}
     </span>
   );
+}
+
+const statusMap: Record<string, StatusVariant> = {
+  UP: "success", ONLINE: "success", HEALTHY: "success", active: "success", resolved: "success",
+  DOWN: "danger", OFFLINE: "danger", UNHEALTHY: "danger", inactive: "danger",
+  DEGRADED: "warning", MAINTENANCE: "warning", acknowledged: "warning", triggered: "danger",
+  UNKNOWN: "neutral",
+};
+
+export function StatusBadge({ status }: { status: string }) {
+  return <Badge variant={statusMap[status] || "neutral"} label={status} />;
+}
+
+export function HostStatusBadge({ status }: { status: string }) {
+  return <Badge variant={statusMap[status] || "neutral"} label={status} />;
+}
+
+const severityMap: Record<string, StatusVariant> = {
+  CRITICAL: "danger", critical: "danger",
+  HIGH: "danger", high: "danger",
+  MEDIUM: "warning", medium: "warning",
+  LOW: "info", low: "info",
+  INFO: "neutral", info: "neutral",
+};
+
+export function SeverityBadge({ severity }: { severity: string }) {
+  return <Badge variant={severityMap[severity] || "neutral"} label={severity} />;
+}
+
+const incidentTypeMap: Record<string, StatusVariant> = {
+  APPLICATION: "neutral", HOST: "neutral", HOST_CAUSED: "warning",
+  downtime: "danger", degraded: "warning", maintenance: "info",
+};
+
+export function IncidentTypeBadge({ type }: { type: string }) {
+  return <Badge variant={incidentTypeMap[type] || "neutral"} label={type} />;
 }

@@ -3,81 +3,131 @@
 @tailwind utilities;
 
 @layer base {
-  :root {
+  /* ── Dark theme (default) ── */
+  :root,
+  [data-theme="dark"] {
+    color-scheme: dark;
+
+    --canvas:        240 10% 3.9%;
+    --canvasMuted:   240 5.9% 10%;
+
+    --surface:       240 5.9% 10%;
+    --surfaceRaised: 240 3.7% 15.9%;
+
+    --border:        240 3.7% 15.9%;
+    --borderStrong:  240 3.8% 26.1%;
+
+    --fg:            0 0% 98%;
+    --fgMuted:       240 5% 64.9%;
+    --fgSubtle:      240 3.8% 46.1%;
+
+    --accent:        217 91% 60%;
+    --accent-fg:     0 0% 100%;
+    --accentMuted:   217 33% 17%;
+
+    --ring:          217 91% 60%;
+
+    --success:       160 84% 39%;
+    --success-fg:    0 0% 100%;
+    --successMuted:  160 40% 12%;
+
+    --danger:        0 84% 60%;
+    --danger-fg:     0 0% 100%;
+    --dangerMuted:   0 40% 12%;
+
+    --warning:       38 92% 50%;
+    --warning-fg:    38 92% 10%;
+    --warningMuted:  38 40% 12%;
+
+    --info:          189 94% 43%;
+    --info-fg:       0 0% 100%;
+    --infoMuted:     189 40% 12%;
+  }
+
+  /* ── Light theme ── */
+  [data-theme="light"] {
     color-scheme: light;
+
+    --canvas:        0 0% 100%;
+    --canvasMuted:   240 5% 96%;
+
+    --surface:       0 0% 100%;
+    --surfaceRaised: 240 5% 96%;
+
+    --border:        240 6% 90%;
+    --borderStrong:  240 5% 84%;
+
+    --fg:            240 6% 10%;
+    --fgMuted:       240 4% 46%;
+    --fgSubtle:      240 5% 65%;
+
+    --accent:        217 91% 50%;
+    --accent-fg:     0 0% 100%;
+    --accentMuted:   217 90% 95%;
+
+    --ring:          217 91% 50%;
+
+    --success:       160 84% 32%;
+    --success-fg:    0 0% 100%;
+    --successMuted:  160 45% 92%;
+
+    --danger:        0 84% 50%;
+    --danger-fg:     0 0% 100%;
+    --dangerMuted:   0 50% 95%;
+
+    --warning:       38 92% 40%;
+    --warning-fg:    0 0% 100%;
+    --warningMuted:  38 60% 92%;
+
+    --info:          189 94% 35%;
+    --info-fg:       0 0% 100%;
+    --infoMuted:     189 50% 93%;
   }
 
   html {
-    @apply bg-slate-100;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
   }
 
   body {
-    @apply min-h-screen text-slate-900 antialiased;
-    background:
-      radial-gradient(circle at top, rgba(37, 99, 235, 0.08), transparent 34%),
-      linear-gradient(180deg, #f8fafc 0%, #eef2ff 100%);
+    @apply bg-canvas text-fg text-[13px] leading-normal;
   }
 
-  *::selection {
-    @apply bg-blue-100 text-slate-900;
+  ::selection {
+    background: hsl(var(--accent) / 0.2);
+    color: hsl(var(--fg));
   }
 
-  h1,
-  h2,
-  h3,
-  h4 {
-    @apply tracking-tight text-slate-950;
+  :focus-visible {
+    @apply outline-none ring-1 ring-ring/40 ring-offset-1 ring-offset-canvas;
   }
+
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: hsl(var(--border)); border-radius: 999px; }
+  ::-webkit-scrollbar-thumb:hover { background: hsl(var(--borderStrong)); }
 }
 
 @layer components {
-  .surface-panel {
-    @apply rounded-3xl border border-slate-200/80 bg-white/90 p-6 shadow-xl backdrop-blur;
-  }
-
-  .page-header-panel {
-    @apply rounded-3xl border border-slate-200/80 px-6 py-6 shadow-xl;
-    background: linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(239, 246, 255, 0.9));
-  }
-
-  .eyebrow-label {
-    @apply text-xs font-semibold uppercase text-sky-700;
-    letter-spacing: 0.24em;
-  }
-
-  .secondary-button {
-    @apply inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-60;
-  }
-
-  .primary-button {
-    @apply inline-flex items-center justify-center rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white shadow-[0_14px_28px_-18px_rgba(15,23,42,0.8)] transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60;
-  }
-
-  .danger-button {
-    @apply inline-flex items-center justify-center rounded-xl border border-rose-200 bg-rose-50 px-4 py-2 text-sm font-medium text-rose-700 transition hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60;
-  }
-
-  .status-chip {
-    @apply inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white/90 px-3 py-1.5 text-xs font-semibold text-slate-700;
-  }
-
-  .status-chip-dot {
-    @apply h-2 w-2 rounded-full;
-  }
-
-  .filter-field {
-    @apply flex flex-col gap-2;
-  }
-
-  .filter-label {
-    @apply text-xs font-semibold uppercase tracking-[0.16em] text-slate-500;
-  }
-
   .filter-input {
-    @apply w-full rounded-2xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-700 shadow-sm transition placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100;
+    @apply w-full rounded-md border border-border bg-canvas px-2.5 py-1.5 text-[13px] text-fg transition-colors placeholder:text-fgSubtle focus:border-borderStrong focus:outline-none focus:ring-1 focus:ring-ring/20;
   }
+  .filter-field {
+    @apply flex flex-col gap-1;
+  }
+  .filter-label {
+    @apply text-[11px] font-medium text-fgMuted;
+  }
+}
 
-  .table-surface {
-    @apply overflow-hidden rounded-3xl border border-slate-200/80 bg-white/95 shadow-xl;
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  .animated-bg-root {
+    display: none !important;
   }
 }

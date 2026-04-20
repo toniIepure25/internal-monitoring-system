@@ -1,15 +1,18 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { AppShell } from "@/components/layout/app-shell";
-import { StatusBadge, HostStatusBadge, IncidentTypeBadge, SeverityBadge } from "@/components/ui/status-badge";
-import { StatCard } from "@/components/ui/stat-card";
-import { CardSkeleton } from "@/components/ui/loading-skeleton";
-import { EmptyState } from "@/components/ui/empty-state";
-import { api } from "@/lib/api";
-import { formatDate } from "@/lib/utils";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { CubeTransparentIcon, ServerIcon, ExclamationTriangleIcon, SparklesIcon } from "@heroicons/react/24/outline";
+import { AppShell } from "@/components/layout/app-shell";
+import { PageHeader } from "@/components/ui/page-header";
+import { StatusBadge, HostStatusBadge, IncidentTypeBadge, SeverityBadge } from "@/components/ui/status-badge";
+import { StatCard } from "@/components/ui/stat-card";
+import { CardGridSkeleton } from "@/components/ui/loading-skeleton";
+import { EmptyState } from "@/components/ui/empty-state";
+import { PageTransition, SectionStagger, SectionItem } from "@/components/ui/motion";
+import { api } from "@/lib/api";
+import { formatDate } from "@/lib/utils";
 import type { UserGroup, Application, Incident, Host } from "@/types";
 
 export default function DashboardPage() {
@@ -36,7 +39,7 @@ export default function DashboardPage() {
         setApps(appsRes.items);
         setHosts(hostsRes.items);
         setSubscriptionCount(subsRes.total || subsRes.items.length);
-      } catch {}
+      } catch { /* partial */ }
       setLoading(false);
     }
     load();
@@ -52,199 +55,125 @@ export default function DashboardPage() {
 
   return (
     <AppShell>
-      <div className="page-header-panel mb-8">
-        <p className="eyebrow-label">Operations Overview</p>
-        <h1 className="mt-2 text-3xl font-semibold">Dashboard</h1>
-        <p className="mt-2 max-w-2xl text-sm text-slate-600">Overview of monitored applications, hosts, and recent activity across your environment.</p>
-      </div>
+      <PageTransition>
+        <PageHeader eyebrow="Overview" title="Dashboard" description="Health, incidents, and operational status at a glance." />
 
-      {loading ? (
-        <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <CardSkeleton key={i} />
-          ))}
-        </div>
-      ) : (
-        <>
-          {/* Stat Cards */}
-          <div className="mb-8 grid grid-cols-2 gap-4 md:grid-cols-4">
-            <StatCard
-              label="Applications"
-              value={apps.length}
-              subtext={`${appsUp} up, ${appsDown} down`}
-              color={appsDown > 0 ? "red" : "green"}
-            />
-            <StatCard
-              label="Hosts"
-              value={hosts.length}
-              subtext={`${hostsOnline} online, ${hostsOffline} offline`}
-              color={hostsOffline > 0 ? "red" : hosts.length > 0 ? "green" : "gray"}
-            />
-            <StatCard
-              label="Active Incidents"
-              value={activeIncidents}
-              subtext={activeIncidents > 0 ? "Requires attention" : "All clear"}
-              color={activeIncidents > 0 ? "red" : "green"}
-            />
-            <StatCard
-              label="My Subscriptions"
-              value={subscriptionCount}
-              subtext="Notification-enabled"
-              color="blue"
-            />
-          </div>
+        {loading ? (
+          <div className="mt-5"><CardGridSkeleton /></div>
+        ) : (
+          <SectionStagger className="mt-5 space-y-6">
+            {/* Metrics */}
+            <SectionItem className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+              <StatCard icon={CubeTransparentIcon} label="Applications" value={apps.length} subtext={`${appsUp} up · ${appsDown} down`} color={appsDown > 0 ? "red" : "green"} delay={0} />
+              <StatCard icon={ServerIcon} label="Hosts" value={hosts.length} subtext={`${hostsOnline} online · ${hostsOffline} offline`} color={hostsOffline > 0 ? "red" : hosts.length > 0 ? "green" : "gray"} delay={0.04} />
+              <StatCard icon={ExclamationTriangleIcon} label="Active incidents" value={activeIncidents} subtext={activeIncidents > 0 ? "Requires attention" : "All clear"} color={activeIncidents > 0 ? "red" : "green"} delay={0.08} />
+              <StatCard icon={SparklesIcon} label="Subscriptions" value={subscriptionCount} subtext="Notification-enabled" color="cyan" delay={0.12} />
+            </SectionItem>
 
-          {/* Host Status Summary */}
-          {hosts.length > 0 && (
-            <section className="mb-8">
-              <div className="mb-4 flex items-center justify-between">
-                <h2 className="text-lg font-semibold text-gray-900">Host Status</h2>
-                <Link href="/hosts" className="text-sm text-blue-600 hover:text-blue-700">View all hosts</Link>
-              </div>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {hosts.slice(0, 6).map((host) => (
-                  <Link
-                    key={host.id}
-                    href={`/hosts/${host.id}`}
-                    className="flex items-center justify-between rounded-3xl border border-slate-200/80 bg-white/92 p-4 shadow-[0_18px_45px_-34px_rgba(15,23,42,0.22)] transition hover:-translate-y-0.5 hover:shadow-[0_22px_50px_-32px_rgba(15,23,42,0.32)]"
-                  >
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-semibold text-gray-900">{host.display_name}</p>
-                      <p className="text-xs text-gray-400">{host.hostname}</p>
+            {/* Two-column body */}
+            <SectionItem className={`grid grid-cols-1 gap-4 ${hosts.length > 0 || groups.length > 0 ? "lg:grid-cols-3" : ""}`}>
+              {/* Left: Incidents + Apps */}
+              <div className={`space-y-4 ${hosts.length > 0 || groups.length > 0 ? "lg:col-span-2" : ""}`}>
+                {/* Recent incidents */}
+                <section className="rounded-lg border border-border bg-surface">
+                  <div className="flex items-center justify-between border-b border-border px-4 py-2.5">
+                    <h2 className="text-[13px] font-medium text-fg">Recent incidents</h2>
+                    <Link href="/incidents" className="text-xs text-fgMuted hover:text-accent">View all →</Link>
+                  </div>
+                  {recentIncidents.length > 0 ? (
+                    <div className="divide-y divide-border">
+                      {recentIncidents.slice(0, 6).map((inc) => (
+                        <div key={inc.id} className="flex items-center justify-between gap-3 px-4 py-2.5">
+                          <div className="min-w-0">
+                            <p className="truncate text-[13px] font-medium text-fg">{inc.title}</p>
+                            <p className="text-[11px] text-fgSubtle">{formatDate(inc.started_at)}</p>
+                          </div>
+                          <div className="flex shrink-0 items-center gap-1.5">
+                            <SeverityBadge severity={inc.severity} />
+                            <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${inc.status === "ONGOING" ? "bg-danger/10 text-danger" : "bg-success/10 text-success"}`}>{inc.status}</span>
+                          </div>
+                        </div>
+                      ))}
                     </div>
-                    <HostStatusBadge status={host.status?.status || "UNKNOWN"} />
-                  </Link>
-                ))}
-              </div>
-            </section>
-          )}
+                  ) : (
+                    <EmptyState title="No incidents" description="Incidents appear here when state changes are detected." className="py-8" />
+                  )}
+                </section>
 
-          {/* Personal Groups */}
-          {groups.length > 0 && (
-            <section className="mb-8">
-              <h2 className="mb-4 text-lg font-semibold text-gray-900">My Groups</h2>
+                {/* Applications */}
+                <section className="rounded-lg border border-border bg-surface">
+                  <div className="flex items-center justify-between border-b border-border px-4 py-2.5">
+                    <h2 className="text-[13px] font-medium text-fg">Applications</h2>
+                    <Link href="/applications" className="text-xs text-fgMuted hover:text-accent">View catalog →</Link>
+                  </div>
+                  {apps.length > 0 ? (
+                    <div className="divide-y divide-border">
+                      {apps.slice(0, 8).map((app) => (
+                        <Link key={app.id} href={`/applications/${app.id}`} className="flex items-center justify-between gap-3 px-4 py-2.5 transition-colors hover:bg-surfaceRaised/40">
+                          <div className="min-w-0">
+                            <p className="truncate text-[13px] font-medium text-fg">{app.display_name}</p>
+                            <p className="truncate text-[11px] text-fgSubtle">{app.base_url}</p>
+                          </div>
+                          <div className="flex shrink-0 items-center gap-2">
+                            {app.status?.last_response_time_ms != null && <span className="text-[11px] tabular-nums text-fgSubtle">{app.status.last_response_time_ms}ms</span>}
+                            <StatusBadge status={app.status?.status || "UNKNOWN"} />
+                          </div>
+                        </Link>
+                      ))}
+                    </div>
+                  ) : (
+                    <EmptyState title="No applications" description="Add your first application to start monitoring." actionLabel="Add application" onAction={() => router.push("/applications/new")} className="py-8" />
+                  )}
+                </section>
+              </div>
+
+              {/* Right: Hosts + Groups */}
               <div className="space-y-4">
-                {groups.map((group) => (
-                  <div key={group.id} className="overflow-hidden rounded-3xl border border-slate-200/80 bg-white/92 shadow-[0_18px_45px_-34px_rgba(15,23,42,0.22)]">
-                    <div className="flex items-center gap-2 border-b border-slate-200/80 px-5 py-3">
-                      {group.color && (
-                        <span className="h-3 w-3 rounded-full" style={{ backgroundColor: group.color }} />
-                      )}
-                      <h3 className="font-medium text-gray-900">{group.name}</h3>
-                      <span className="ml-auto text-xs text-gray-400">{group.applications?.length || 0} apps</span>
+                {/* Hosts */}
+                {hosts.length > 0 && (
+                  <section className="rounded-lg border border-border bg-surface">
+                    <div className="flex items-center justify-between border-b border-border px-4 py-2.5">
+                      <h2 className="text-[13px] font-medium text-fg">Hosts</h2>
+                      <Link href="/hosts" className="text-xs text-fgMuted hover:text-accent">View all →</Link>
                     </div>
-                    {group.applications && group.applications.length > 0 ? (
-                      <div className="divide-y divide-gray-50">
-                        {group.applications.map((app) => (
-                          <Link
-                            key={app.id}
-                            href={`/applications/${app.id}`}
-                            className="flex items-center justify-between px-5 py-3 transition-colors hover:bg-gray-50"
-                          >
-                            <div>
-                              <span className="text-sm font-medium text-gray-900">{app.display_name}</span>
-                              {app.environment && (
-                                <span className="ml-2 rounded bg-gray-100 px-1.5 py-0.5 text-xs text-gray-500">
-                                  {app.environment}
-                                </span>
-                              )}
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <StatusBadge status={app.status?.status || "UNKNOWN"} />
-                              {app.status?.last_response_time_ms != null && (
-                                <span className="text-xs text-gray-400">{app.status.last_response_time_ms}ms</span>
-                              )}
-                            </div>
-                          </Link>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="px-5 py-4 text-sm text-gray-400">No applications in this group</p>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </section>
-          )}
+                    <div className="divide-y divide-border">
+                      {hosts.slice(0, 5).map((host) => (
+                        <Link key={host.id} href={`/hosts/${host.id}`} className="flex items-center justify-between px-4 py-2.5 transition-colors hover:bg-surfaceRaised/40">
+                          <div className="min-w-0">
+                            <p className="truncate text-[13px] font-medium text-fg">{host.display_name}</p>
+                            <p className="text-[11px] text-fgSubtle">{host.hostname}</p>
+                          </div>
+                          <HostStatusBadge status={host.status?.status || "UNKNOWN"} />
+                        </Link>
+                      ))}
+                    </div>
+                  </section>
+                )}
 
-          {/* Recent Incidents */}
-          <section className="mb-8">
-            <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-gray-900">Recent Incidents</h2>
-              <Link href="/incidents" className="text-sm text-blue-600 hover:text-blue-700">View all</Link>
-            </div>
-            {recentIncidents.length > 0 ? (
-              <div className="divide-y divide-slate-100 overflow-hidden rounded-3xl border border-slate-200/80 bg-white/92 shadow-[0_18px_45px_-34px_rgba(15,23,42,0.22)]">
-                {recentIncidents.map((inc) => (
-                  <div key={inc.id} className="flex items-center justify-between px-5 py-3.5">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        <p className="truncate text-sm font-medium text-gray-900">{inc.title}</p>
-                        <IncidentTypeBadge type={inc.incident_type || "APPLICATION"} />
-                      </div>
-                      <p className="mt-0.5 text-xs text-gray-400">{formatDate(inc.started_at)}</p>
+                {/* Groups */}
+                {groups.length > 0 && (
+                  <section className="rounded-lg border border-border bg-surface">
+                    <div className="border-b border-border px-4 py-2.5">
+                      <h2 className="text-[13px] font-medium text-fg">Groups</h2>
                     </div>
-                    <div className="ml-4 flex items-center gap-2">
-                      <SeverityBadge severity={inc.severity} />
-                      <span
-                        className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                          inc.status === "ONGOING"
-                            ? "bg-red-50 text-red-700"
-                            : "bg-green-50 text-green-700"
-                        }`}
-                      >
-                        {inc.status}
-                      </span>
+                    <div className="divide-y divide-border">
+                      {groups.map((group) => (
+                        <div key={group.id} className="px-4 py-2.5">
+                          <div className="flex items-center gap-2">
+                            {group.color && <span className="h-2 w-2 rounded-full" style={{ backgroundColor: group.color }} />}
+                            <span className="text-[13px] font-medium text-fg">{group.name}</span>
+                            <span className="ml-auto text-[11px] text-fgSubtle">{group.applications?.length || 0} apps</span>
+                          </div>
+                        </div>
+                      ))}
                     </div>
-                  </div>
-                ))}
+                  </section>
+                )}
               </div>
-            ) : (
-              <EmptyState title="No incidents recorded" description="Incidents will appear here when application or host state changes are detected." />
-            )}
-          </section>
-
-          {/* All Applications */}
-          <section>
-            <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-gray-900">All Applications</h2>
-              <Link href="/applications" className="text-sm text-blue-600 hover:text-blue-700">
-                View catalog
-              </Link>
-            </div>
-            {apps.length > 0 ? (
-              <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
-                {apps.map((app) => (
-                  <Link
-                    key={app.id}
-                    href={`/applications/${app.id}`}
-                    className="rounded-3xl border border-slate-200/80 bg-white/92 p-4 shadow-[0_18px_45px_-34px_rgba(15,23,42,0.22)] transition hover:-translate-y-0.5 hover:shadow-[0_22px_50px_-32px_rgba(15,23,42,0.32)]"
-                  >
-                    <div className="mb-2 flex items-start justify-between">
-                      <h3 className="truncate pr-2 text-sm font-medium text-gray-900">{app.display_name}</h3>
-                      <StatusBadge status={app.status?.status || "UNKNOWN"} />
-                    </div>
-                    <p className="truncate text-xs text-gray-400">{app.base_url}</p>
-                    {app.status?.last_checked_at && (
-                      <p className="mt-1 text-xs text-gray-400">
-                        Checked: {formatDate(app.status.last_checked_at)}
-                        {app.status.last_response_time_ms != null && ` (${app.status.last_response_time_ms}ms)`}
-                      </p>
-                    )}
-                  </Link>
-                ))}
-              </div>
-            ) : (
-              <EmptyState
-                title="No applications yet"
-                description="Add your first application to start monitoring."
-                actionLabel="Add Application"
-                onAction={() => router.push("/applications")}
-              />
-            )}
-          </section>
-        </>
-      )}
+            </SectionItem>
+          </SectionStagger>
+        )}
+      </PageTransition>
     </AppShell>
   );
 }

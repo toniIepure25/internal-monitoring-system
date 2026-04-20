@@ -2,19 +2,23 @@
 
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { ArrowLeftIcon } from "@heroicons/react/24/outline";
 import { AppShell } from "@/components/layout/app-shell";
 import { StatusBadge, SeverityBadge } from "@/components/ui/status-badge";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { PageTransition, SectionStagger, SectionItem } from "@/components/ui/motion";
+import { useToast } from "@/components/ui/toast";
 import { api } from "@/lib/api";
 import { formatDate } from "@/lib/utils";
 import type { Application, HealthCandidate, Incident, Subscription } from "@/types";
 
-interface AppDetail extends Application {
-  health_candidates: HealthCandidate[];
-}
+interface AppDetail extends Application { health_candidates: HealthCandidate[]; }
 
 export default function ApplicationDetailPage() {
   const params = useParams();
   const router = useRouter();
+  const toast = useToast();
   const [app, setApp] = useState<AppDetail | null>(null);
   const [incidents, setIncidents] = useState<Incident[]>([]);
   const [loading, setLoading] = useState(true);
@@ -30,10 +34,9 @@ export default function ApplicationDetailPage() {
           api.get<{ items: Incident[] }>(`/api/incidents?application_id=${params.id}&limit=20`),
           api.get<{ items: Subscription[]; total: number }>(`/api/subscriptions?limit=200`),
         ]);
-        setApp(appRes);
-        setIncidents(incRes.items);
-        setSubscription(subsRes.items.find((item) => item.application_id === params.id) || null);
-      } catch {}
+        setApp(appRes); setIncidents(incRes.items);
+        setSubscription(subsRes.items.find((s) => s.application_id === params.id) || null);
+      } catch { /* noop */ }
       setLoading(false);
     }
     if (!params.id) return;
@@ -46,28 +49,16 @@ export default function ApplicationDetailPage() {
     if (!app) return;
     setSubscribing(true);
     try {
-      if (subscription) {
-        await api.delete(`/api/subscriptions/${subscription.id}`);
-        setSubscription(null);
-        alert("Unsubscribed successfully!");
-      } else {
-        const created = await api.post<Subscription>("/api/subscriptions", { application_id: app.id });
-        setSubscription(created);
-        alert("Subscribed successfully!");
-      }
-    } catch (err: any) {
-      alert(err.message || `Failed to ${subscription ? "unsubscribe" : "subscribe"}`);
-    }
+      if (subscription) { await api.delete(`/api/subscriptions/${subscription.id}`); setSubscription(null); toast.success("Unsubscribed"); }
+      else { const s = await api.post<Subscription>("/api/subscriptions", { application_id: app.id }); setSubscription(s); toast.success("Subscribed"); }
+    } catch (err: unknown) { toast.error(err instanceof Error ? err.message : "Failed"); }
     setSubscribing(false);
   };
 
   const handleRediscover = async () => {
     if (!app) return;
     setRediscovering(true);
-    try {
-      await api.post(`/api/applications/${app.id}/rediscover`);
-      alert("Discovery started. The status will update automatically.");
-    } catch {}
+    try { await api.post(`/api/applications/${app.id}/rediscover`); toast.info("Discovery started"); } catch (err: unknown) { toast.error(err instanceof Error ? err.message : "Failed"); }
     setRediscovering(false);
   };
 
@@ -76,165 +67,113 @@ export default function ApplicationDetailPage() {
     try {
       const updated = await api.patch<AppDetail>(`/api/applications/${app.id}/health-url`, { health_url: url });
       setApp({ ...app, ...updated, health_candidates: app.health_candidates });
-    } catch {}
+      toast.success("Health URL updated");
+    } catch (err: unknown) { toast.error(err instanceof Error ? err.message : "Failed"); }
   };
 
-  if (loading) {
-    return <AppShell><div className="text-gray-500 text-sm">Loading...</div></AppShell>;
-  }
-
-  if (!app) {
-    return <AppShell><div className="text-red-500">Application not found</div></AppShell>;
-  }
+  if (loading) return <AppShell><p className="text-sm text-fgMuted">Loading…</p></AppShell>;
+  if (!app) return <AppShell><div className="rounded-lg bg-danger/10 px-4 py-3 text-[13px] text-danger">Application not found</div></AppShell>;
 
   return (
     <AppShell>
-      <div className="mb-6">
-        <button onClick={() => router.back()} className="text-sm text-gray-500 hover:text-gray-700 mb-3 inline-block">&larr; Back</button>
-        <div className="flex items-start justify-between">
-          <div>
-            <div className="flex items-center gap-3">
-              <h1 className="text-2xl font-bold text-gray-900">{app.display_name}</h1>
-              <StatusBadge status={app.status?.status || "UNKNOWN"} />
-              {app.is_maintenance && <span className="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded">Maintenance</span>}
+      <PageTransition>
+        <div className="mb-5">
+          <button type="button" onClick={() => router.back()} className="mb-3 inline-flex items-center gap-1 text-xs text-fgMuted hover:text-fg">
+            <ArrowLeftIcon className="h-3 w-3" /> Back
+          </button>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="text-lg font-semibold text-fg">{app.display_name}</h1>
+                <StatusBadge status={app.status?.status || "UNKNOWN"} />
+                {app.is_maintenance && <span className="rounded bg-warning/10 px-1.5 py-0.5 text-[11px] font-medium text-warning">Maintenance</span>}
+              </div>
+              <p className="mt-0.5 text-xs text-fgMuted">{app.base_url}</p>
             </div>
-            <p className="text-sm text-gray-500 mt-1">{app.base_url}</p>
-          </div>
-          <div className="flex gap-2">
-            <button
-              onClick={handleSubscribe}
-              disabled={subscribing}
-              className="bg-brand-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-brand-700 disabled:opacity-50"
-            >
-              {subscribing ? "Working..." : subscription ? "Unsubscribe" : "Subscribe"}
-            </button>
-            <button
-              onClick={handleRediscover}
-              disabled={rediscovering}
-              className="bg-gray-100 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-200 disabled:opacity-50"
-            >
-              Re-discover
-            </button>
+            <div className="flex shrink-0 gap-2">
+              <Button onClick={handleSubscribe} disabled={subscribing}>{subscribing ? "…" : subscription ? "Unsubscribe" : "Subscribe"}</Button>
+              <Button variant="secondary" onClick={handleRediscover} disabled={rediscovering}>{rediscovering ? "…" : "Re-discover"}</Button>
+            </div>
           </div>
         </div>
-      </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Details Panel */}
-        <div className="lg:col-span-2 space-y-6">
-          {/* Status Info */}
-          <div className="bg-white rounded-xl border border-gray-200 p-5">
-            <h2 className="text-sm font-semibold text-gray-900 mb-3">Monitoring Status</h2>
-            <dl className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-              <div>
-                <dt className="text-gray-500">Health URL</dt>
-                <dd className="font-medium text-gray-900 truncate">{app.health_url || "Not set"}</dd>
-              </div>
-              <div>
-                <dt className="text-gray-500">Detection</dt>
-                <dd className="font-medium text-gray-900">{app.detection_source}</dd>
-              </div>
-              <div>
-                <dt className="text-gray-500">Interval</dt>
-                <dd className="font-medium text-gray-900">{app.monitoring_interval_seconds}s</dd>
-              </div>
-              <div>
-                <dt className="text-gray-500">Last Checked</dt>
-                <dd className="font-medium text-gray-900">{app.status?.last_checked_at ? formatDate(app.status.last_checked_at) : "Never"}</dd>
-              </div>
-              <div>
-                <dt className="text-gray-500">Response Time</dt>
-                <dd className="font-medium text-gray-900">{app.status?.last_response_time_ms != null ? `${app.status.last_response_time_ms}ms` : "-"}</dd>
-              </div>
-              <div>
-                <dt className="text-gray-500">HTTP Status</dt>
-                <dd className="font-medium text-gray-900">{app.status?.last_http_status || "-"}</dd>
-              </div>
-              <div>
-                <dt className="text-gray-500">Environment</dt>
-                <dd className="font-medium text-gray-900">{app.environment || "-"}</dd>
-              </div>
-              <div>
-                <dt className="text-gray-500">Created</dt>
-                <dd className="font-medium text-gray-900">{formatDate(app.created_at)}</dd>
-              </div>
-            </dl>
+        <SectionStagger className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+          <div className="space-y-4 lg:col-span-2">
+            <SectionItem><Card>
+              <CardHeader><CardTitle>Monitoring status</CardTitle></CardHeader>
+              <CardContent>
+                <dl className="grid grid-cols-2 gap-x-6 gap-y-3 text-[13px] md:grid-cols-4">
+                  {[
+                    ["Health URL", app.health_url || "Not set"],
+                    ["Detection", app.detection_source],
+                    ["Interval", `${app.monitoring_interval_seconds}s`],
+                    ["Last checked", app.status?.last_checked_at ? formatDate(app.status.last_checked_at) : "Never"],
+                    ["Response", app.status?.last_response_time_ms != null ? `${app.status.last_response_time_ms}ms` : "—"],
+                    ["HTTP status", app.status?.last_http_status || "—"],
+                    ["Environment", app.environment || "—"],
+                    ["Created", formatDate(app.created_at)],
+                  ].map(([label, value]) => (
+                    <div key={label as string}>
+                      <dt className="text-[11px] text-fgSubtle">{label}</dt>
+                      <dd className="mt-0.5 truncate font-medium text-fg">{value}</dd>
+                    </div>
+                  ))}
+                </dl>
+              </CardContent>
+            </Card></SectionItem>
+
+            <SectionItem><Card>
+              <CardHeader><CardTitle>Incident history</CardTitle></CardHeader>
+              {incidents.length > 0 ? (
+                <div className="divide-y divide-border">
+                  {incidents.map((inc) => (
+                    <div key={inc.id} className="flex items-center justify-between gap-3 px-4 py-2.5">
+                      <div className="min-w-0">
+                        <p className="truncate text-[13px] font-medium text-fg">{inc.title}</p>
+                        <p className="text-[11px] text-fgSubtle">{formatDate(inc.started_at)}</p>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <SeverityBadge severity={inc.severity} />
+                        <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${inc.status === "ONGOING" ? "bg-danger/10 text-danger" : "bg-success/10 text-success"}`}>{inc.status}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <CardContent className="text-center text-xs text-fgMuted">No incidents recorded</CardContent>
+              )}
+            </Card></SectionItem>
           </div>
 
-          {/* Incidents */}
-          <div className="bg-white rounded-xl border border-gray-200">
-            <div className="px-5 py-3 border-b border-gray-100">
-              <h2 className="text-sm font-semibold text-gray-900">Incident History</h2>
-            </div>
-            {incidents.length > 0 ? (
-              <div className="divide-y divide-gray-50">
-                {incidents.map((inc) => (
-                  <div key={inc.id} className="px-5 py-3 flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-gray-900">{inc.title}</p>
-                      <p className="text-xs text-gray-400">{formatDate(inc.started_at)}</p>
+          <SectionItem><Card>
+            <CardHeader><CardTitle>Health candidates</CardTitle></CardHeader>
+            {app.health_candidates.length > 0 ? (
+              <div className="divide-y divide-border">
+                {app.health_candidates.sort((a, b) => b.score - a.score).map((c) => (
+                  <div key={c.id} className="px-4 py-2.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="truncate font-mono text-[11px] text-fgMuted">{c.url.replace(app.base_url, "")}</span>
+                      <span className={`text-[11px] font-semibold tabular-nums ${c.score >= 50 ? "text-success" : c.score > 0 ? "text-warning" : "text-fgSubtle"}`}>{c.score}</span>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <SeverityBadge severity={inc.severity} />
-                      <span className={`text-xs px-2 py-0.5 rounded ${inc.status === "ONGOING" ? "bg-red-50 text-red-700" : "bg-green-50 text-green-700"}`}>
-                        {inc.status}
-                      </span>
+                    <div className="mt-1 flex flex-wrap items-center gap-1 text-[10px] text-fgSubtle">
+                      {c.http_status && <span>HTTP {c.http_status}</span>}
+                      {c.response_time_ms != null && <span className="tabular-nums">{c.response_time_ms}ms</span>}
+                      {c.is_json && <span className="text-accent">JSON</span>}
+                      {c.has_health_indicators && <span className="text-success">Health</span>}
+                      {c.is_selected && <span className="rounded bg-accent/10 px-1 text-accent">Selected</span>}
                     </div>
+                    {!c.is_selected && c.score > 0 && (
+                      <button type="button" onClick={() => handleSetHealthUrl(c.url)} className="mt-1 text-[11px] font-medium text-accent hover:underline">Use this endpoint</button>
+                    )}
                   </div>
                 ))}
               </div>
             ) : (
-              <p className="px-5 py-8 text-center text-sm text-gray-400">No incidents recorded</p>
+              <CardContent className="text-center text-xs text-fgMuted">No candidates probed yet.</CardContent>
             )}
-          </div>
-        </div>
-
-        {/* Discovery Candidates */}
-        <div>
-          <div className="bg-white rounded-xl border border-gray-200">
-            <div className="px-5 py-3 border-b border-gray-100">
-              <h2 className="text-sm font-semibold text-gray-900">Health Candidates</h2>
-            </div>
-            {app.health_candidates.length > 0 ? (
-              <div className="divide-y divide-gray-50">
-                {app.health_candidates
-                  .sort((a, b) => b.score - a.score)
-                  .map((c) => (
-                    <div key={c.id} className="px-5 py-3">
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-xs font-mono text-gray-600 truncate flex-1 mr-2">
-                          {c.url.replace(app.base_url, "")}
-                        </span>
-                        <span className={`text-xs font-bold ${c.score >= 50 ? "text-green-600" : c.score > 0 ? "text-yellow-600" : "text-gray-400"}`}>
-                          {c.score}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2 text-xs text-gray-400">
-                        {c.http_status && <span>HTTP {c.http_status}</span>}
-                        {c.response_time_ms != null && <span>{c.response_time_ms}ms</span>}
-                        {c.is_json && <span className="text-blue-500">JSON</span>}
-                        {c.has_health_indicators && <span className="text-green-500">Health</span>}
-                        {c.is_selected && <span className="bg-brand-50 text-brand-700 px-1.5 py-0.5 rounded">Selected</span>}
-                      </div>
-                      {!c.is_selected && c.score > 0 && (
-                        <button
-                          onClick={() => handleSetHealthUrl(c.url)}
-                          className="text-xs text-brand-600 hover:text-brand-700 mt-1"
-                        >
-                          Use this endpoint
-                        </button>
-                      )}
-                    </div>
-                  ))}
-              </div>
-            ) : (
-              <p className="px-5 py-6 text-center text-sm text-gray-400">
-                No candidates probed yet. Discovery may still be running.
-              </p>
-            )}
-          </div>
-        </div>
-      </div>
+          </Card></SectionItem>
+        </SectionStagger>
+      </PageTransition>
     </AppShell>
   );
 }

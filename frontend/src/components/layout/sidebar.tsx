@@ -1,105 +1,181 @@
 "use client";
 
-import Link from "next/link";
 import { usePathname } from "next/navigation";
+import Link from "next/link";
+import { motion } from "framer-motion";
+import {
+  HomeIcon, CubeTransparentIcon, ServerIcon, SparklesIcon, BellIcon,
+  UserGroupIcon, ExclamationTriangleIcon, Cog6ToothIcon, ShieldCheckIcon,
+  ChevronLeftIcon, ArrowRightOnRectangleIcon, SunIcon, MoonIcon, MagnifyingGlassIcon,
+} from "@heroicons/react/24/outline";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth";
+import { useTheme } from "@/lib/theme";
+import { MonitorIcon } from "@/components/ui/monitor-icon";
 
-const navItems = [
-  { href: "/dashboard", label: "Dashboard", icon: "M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-4 0h4" },
-  { href: "/applications", label: "All Applications", icon: "M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" },
-  { href: "/hosts", label: "Hosts", icon: "M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01" },
-  { href: "/subscriptions", label: "My Subscriptions", icon: "M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" },
-  { href: "/notifications", label: "My Notifications", icon: "M7 8h10M7 12h10M7 16h6m-8 5h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v14a2 2 0 002 2z" },
-  { href: "/groups", label: "My Groups", icon: "M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" },
-  { href: "/incidents", label: "Incidents", icon: "M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" },
-  { href: "/settings", label: "Settings", icon: "M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" },
+const nav = [
+  { href: "/dashboard", label: "Dashboard", icon: HomeIcon },
+  { href: "/applications", label: "Applications", icon: CubeTransparentIcon },
+  { href: "/hosts", label: "Hosts", icon: ServerIcon },
+  { href: "/incidents", label: "Incidents", icon: ExclamationTriangleIcon },
+  { href: "/notifications", label: "Notifications", icon: BellIcon },
+  { href: "/subscriptions", label: "Subscriptions", icon: SparklesIcon },
+  { href: "/groups", label: "Groups", icon: UserGroupIcon },
 ];
 
-const adminItems = [
-  { href: "/admin", label: "Admin", icon: "M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" },
+const bottom = [
+  { href: "/settings", label: "Settings", icon: Cog6ToothIcon },
 ];
 
-export function Sidebar() {
+interface SidebarProps {
+  collapsed?: boolean;
+  onToggleCollapse?: () => void;
+  onNavigate?: () => void;
+  className?: string;
+}
+
+export function Sidebar({ collapsed = false, onToggleCollapse, onNavigate, className }: SidebarProps) {
   const pathname = usePathname();
   const { user, logout } = useAuth();
+  const { theme, toggle: toggleTheme } = useTheme();
+
+  const link = (item: (typeof nav)[0]) => {
+    const Icon = item.icon;
+    const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
+    return (
+      <Link
+        key={item.href}
+        href={item.href}
+        onClick={() => onNavigate?.()}
+        title={collapsed ? item.label : undefined}
+        className={cn(
+          "group relative flex items-center gap-2.5 rounded-md px-2 py-1.5 text-[13px] transition-all duration-150",
+          active ? "text-fg font-medium" : "text-fgMuted hover:text-fg",
+        )}
+      >
+        {active && (
+          <motion.div
+            layoutId="sidebar-active"
+            className="absolute inset-0 rounded-md bg-surfaceRaised"
+            transition={{ type: "spring", stiffness: 380, damping: 30 }}
+          />
+        )}
+        <span className={cn(
+          "relative z-10 transition-colors duration-150",
+          !active && "group-hover:bg-surfaceRaised/60",
+        )} />
+        <Icon className={cn("relative z-10 h-4 w-4 shrink-0 transition-colors", active ? "text-accent" : "text-fgSubtle group-hover:text-fgMuted")} />
+        <span className={cn("relative z-10 truncate", collapsed && "lg:sr-only")}>{item.label}</span>
+      </Link>
+    );
+  };
 
   return (
-    <aside className="min-h-screen w-full shrink-0 border-r border-slate-200/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.95),rgba(241,245,249,0.92))] px-4 py-5 shadow-[inset_-1px_0_0_rgba(148,163,184,0.16)] lg:w-72">
-      <div className="rounded-3xl border border-slate-200/80 bg-white/90 p-5 shadow-[0_18px_40px_-28px_rgba(15,23,42,0.35)]">
-        <div className="flex items-center gap-3">
-          <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[linear-gradient(135deg,#0f172a,#2563eb)] text-sm font-bold text-white shadow-[0_18px_30px_-20px_rgba(37,99,235,0.8)]">
-            IM
-          </div>
-          <div>
-            <h1 className="text-base font-semibold text-slate-950">Internal Monitor</h1>
-            <p className="mt-0.5 text-xs text-slate-500">Operations visibility workspace</p>
-          </div>
-        </div>
+    <div
+      className={cn(
+        "flex h-full flex-col border-r border-border bg-canvas/80 backdrop-blur-md transition-[width] duration-200",
+        collapsed ? "lg:w-[52px]" : "w-[220px]",
+        className,
+      )}
+    >
+      {/* Logo */}
+      <div className="flex h-12 shrink-0 items-center gap-2 px-3">
+        <motion.div
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+          className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-accent"
+        >
+          <MonitorIcon className="h-3.5 w-3.5 text-accentFg" />
+        </motion.div>
+        <span className={cn("text-[13px] font-semibold text-fg", collapsed && "lg:sr-only")}>Monitor</span>
       </div>
 
-      <nav className="flex-1 space-y-1 px-2 py-6">
-        {navItems.map((item) => (
-          <Link
-            key={item.href}
-            href={item.href}
-            className={cn(
-              "flex items-center gap-3 rounded-2xl px-4 py-3 text-sm transition-all",
-              pathname.startsWith(item.href)
-                ? "bg-[linear-gradient(135deg,rgba(219,234,254,0.95),rgba(239,246,255,0.95))] text-sky-800 shadow-[0_14px_30px_-24px_rgba(37,99,235,0.65)] ring-1 ring-inset ring-sky-200"
-                : "text-slate-600 hover:bg-white/80 hover:text-slate-900",
-            )}
-          >
-            <svg className="h-5 w-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.6}>
-              <path strokeLinecap="round" strokeLinejoin="round" d={item.icon} />
-            </svg>
-            <span className="font-medium">{item.label}</span>
-          </Link>
-        ))}
-
-        {user?.role === "admin" && (
-          <>
-            <div className="pb-2 pt-5">
-              <p className="px-4 text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400">Admin</p>
-            </div>
-            {adminItems.map((item) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={cn(
-                  "flex items-center gap-3 rounded-2xl px-4 py-3 text-sm transition-all",
-                  pathname.startsWith(item.href)
-                    ? "bg-[linear-gradient(135deg,rgba(219,234,254,0.95),rgba(239,246,255,0.95))] text-sky-800 shadow-[0_14px_30px_-24px_rgba(37,99,235,0.65)] ring-1 ring-inset ring-sky-200"
-                    : "text-slate-600 hover:bg-white/80 hover:text-slate-900",
-                )}
-              >
-                <svg className="h-5 w-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.6}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d={item.icon} />
-                </svg>
-                <span className="font-medium">{item.label}</span>
-              </Link>
-            ))}
-          </>
+      {/* Search trigger */}
+      <motion.button
+        whileHover={{ scale: 1.01 }}
+        whileTap={{ scale: 0.98 }}
+        type="button"
+        onClick={() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "k", metaKey: true }))}
+        title="Search (⌘K)"
+        className={cn(
+          "mx-2 mb-1 flex items-center gap-2 rounded-md border border-border px-2 py-1.5 text-[11px] text-fgSubtle transition-colors hover:border-borderStrong hover:text-fgMuted",
+          collapsed && "justify-center",
         )}
+      >
+        <MagnifyingGlassIcon className="h-3.5 w-3.5 shrink-0" />
+        <span className={cn("flex-1 truncate text-left", collapsed && "lg:sr-only")}>Search…</span>
+        <kbd className={cn("rounded border border-border px-1 text-[10px]", collapsed && "lg:sr-only")}>⌘K</kbd>
+      </motion.button>
+
+      {/* Main nav */}
+      <nav className="flex-1 space-y-0.5 overflow-y-auto px-2 py-1" aria-label="Main">
+        {nav.map(link)}
       </nav>
 
-      <div className="rounded-3xl border border-slate-200/80 bg-white/92 p-4 shadow-[0_18px_40px_-28px_rgba(15,23,42,0.35)]">
-        <div className="mb-3 flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[linear-gradient(135deg,#dbeafe,#eff6ff)] text-sm font-semibold text-sky-800 ring-1 ring-inset ring-sky-200">
+      {/* Bottom nav */}
+      <div className="space-y-0.5 border-t border-border px-2 py-2">
+        {bottom.map(link)}
+        {user?.role === "admin" && link({ href: "/admin", label: "Admin", icon: ShieldCheckIcon })}
+      </div>
+
+      {/* Theme + collapse */}
+      <div className="flex items-center border-t border-border px-2 py-1.5">
+        <motion.button
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.92 }}
+          type="button"
+          onClick={toggleTheme}
+          title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
+          className="flex items-center gap-1.5 rounded-md px-1.5 py-1 text-fgSubtle transition-colors hover:bg-surfaceRaised hover:text-fgMuted"
+        >
+          {theme === "dark" ? <SunIcon className="h-3.5 w-3.5" /> : <MoonIcon className="h-3.5 w-3.5" />}
+          <span className={cn("text-[11px]", collapsed && "lg:sr-only")}>
+            {theme === "dark" ? "Light mode" : "Dark mode"}
+          </span>
+        </motion.button>
+        {onToggleCollapse && (
+          <motion.button
+            whileHover={{ scale: 1.1 }}
+            whileTap={{ scale: 0.9 }}
+            type="button"
+            onClick={onToggleCollapse}
+            className="ml-auto hidden h-7 w-7 items-center justify-center rounded-md text-fgSubtle transition-colors hover:bg-surfaceRaised hover:text-fgMuted lg:flex"
+            aria-label={collapsed ? "Expand" : "Collapse"}
+          >
+            <motion.div
+              animate={{ rotate: collapsed ? 180 : 0 }}
+              transition={{ duration: 0.25 }}
+            >
+              <ChevronLeftIcon className="h-3.5 w-3.5" />
+            </motion.div>
+          </motion.button>
+        )}
+      </div>
+
+      {/* User */}
+      <div className="border-t border-border px-2 py-2">
+        <div className={cn("flex items-center gap-2", collapsed && "lg:justify-center")}>
+          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-surfaceRaised text-[11px] font-medium text-fgMuted">
             {user?.display_name?.charAt(0)?.toUpperCase() || "?"}
           </div>
-          <div className="flex-1 min-w-0">
-            <p className="truncate text-sm font-semibold text-slate-900">{user?.display_name}</p>
-            <p className="truncate text-xs text-slate-500">{user?.email}</p>
+          <div className={cn("min-w-0 flex-1", collapsed && "lg:sr-only")}>
+            <p className="truncate text-[13px] font-medium text-fg">{user?.display_name}</p>
+            <p className="truncate text-[11px] text-fgSubtle">{user?.email}</p>
           </div>
         </div>
-        <button
+        <motion.button
+          whileTap={{ scale: 0.97 }}
+          type="button"
           onClick={logout}
-          className="secondary-button w-full justify-start"
+          className={cn(
+            "mt-1.5 flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-[13px] text-fgSubtle transition-colors hover:bg-danger/10 hover:text-danger",
+            collapsed && "lg:justify-center",
+          )}
         >
-          Sign out
-        </button>
+          <ArrowRightOnRectangleIcon className="h-3.5 w-3.5 shrink-0" />
+          <span className={cn(collapsed && "lg:sr-only")}>Sign out</span>
+        </motion.button>
       </div>
-    </aside>
+    </div>
   );
 }

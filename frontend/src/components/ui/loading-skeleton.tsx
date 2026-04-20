@@ -1,15 +1,18 @@
-"use client";
+import { cn } from "@/lib/utils";
 
-export function LoadingSkeleton({ rows = 3 }: { rows?: number }) {
+function Bone({ className }: { className?: string }) {
+  return <div className={cn("animate-pulse rounded bg-surfaceRaised", className)} />;
+}
+
+export function TableSkeleton({ rows = 5, cols = 4 }: { rows?: number; cols?: number }) {
   return (
-    <div className="animate-pulse space-y-4">
-      {Array.from({ length: rows }).map((_, i) => (
-        <div key={i} className="flex items-center space-x-4">
-          <div className="h-10 w-10 rounded-lg bg-gray-200" />
-          <div className="flex-1 space-y-2">
-            <div className="h-4 w-3/4 rounded bg-gray-200" />
-            <div className="h-3 w-1/2 rounded bg-gray-200" />
-          </div>
+    <div className="w-full">
+      <div className="flex gap-4 border-b border-border px-3 py-2.5">
+        {Array.from({ length: cols }).map((_, i) => <Bone key={i} className="h-3 flex-1" />)}
+      </div>
+      {Array.from({ length: rows }).map((_, r) => (
+        <div key={r} className="flex gap-4 border-b border-border/50 px-3 py-3">
+          {Array.from({ length: cols }).map((_, c) => <Bone key={c} className="h-3 flex-1" />)}
         </div>
       ))}
     </div>
@@ -17,26 +20,46 @@ export function LoadingSkeleton({ rows = 3 }: { rows?: number }) {
 }
 
 export function CardSkeleton() {
+  return <Bone className="h-[88px] rounded-lg" />;
+}
+
+export function LoadingSkeleton({ rows = 3 }: { rows?: number }) {
   return (
-    <div className="animate-pulse rounded-xl border border-gray-200 bg-white p-5">
-      <div className="h-3 w-24 rounded bg-gray-200" />
-      <div className="mt-3 h-8 w-16 rounded bg-gray-200" />
-      <div className="mt-2 h-3 w-32 rounded bg-gray-200" />
+    <div className="space-y-3">
+      {Array.from({ length: rows }).map((_, i) => <Bone key={i} className="h-4" />)}
     </div>
   );
 }
 
-export function TableSkeleton({ cols = 4, rows = 5 }: { cols?: number; rows?: number }) {
+export function CardGridSkeleton({ count = 4 }: { count?: number }) {
   return (
-    <div className="animate-pulse">
-      <div className="grid gap-4" style={{ gridTemplateColumns: `repeat(${cols}, 1fr)` }}>
-        {Array.from({ length: cols }).map((_, i) => (
-          <div key={`h-${i}`} className="h-4 rounded bg-gray-200" />
-        ))}
-        {Array.from({ length: rows * cols }).map((_, i) => (
-          <div key={`c-${i}`} className="h-4 rounded bg-gray-100" />
-        ))}
+    <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+      {Array.from({ length: count }).map((_, i) => <CardSkeleton key={i} />)}
+    </div>
+  );
+}
+
+export function FormSkeleton() {
+  return (
+    <div className="space-y-4">
+      {Array.from({ length: 4 }).map((_, i) => (
+        <div key={i} className="space-y-1.5">
+          <Bone className="h-3 w-24" />
+          <Bone className="h-8" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+export function PageSkeleton() {
+  return (
+    <div className="space-y-6">
+      <div className="space-y-2">
+        <Bone className="h-4 w-32" />
+        <Bone className="h-3 w-64" />
       </div>
+      <CardGridSkeleton />
     </div>
   );
 }

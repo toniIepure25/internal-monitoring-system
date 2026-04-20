@@ -1,209 +1,124 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { api } from "@/lib/api";
-import { HostDetail } from "@/types";
-import { HostStatusBadge, StatusBadge } from "@/components/ui/status-badge";
-import { LoadingSkeleton } from "@/components/ui/loading-skeleton";
-import { EmptyState } from "@/components/ui/empty-state";
+import { ArrowLeftIcon } from "@heroicons/react/24/outline";
 import { AppShell } from "@/components/layout/app-shell";
+import { HostStatusBadge } from "@/components/ui/status-badge";
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/empty-state";
+import { DataTableShell, Th, Td } from "@/components/ui/data-table-shell";
+import { PageTransition, SectionStagger, SectionItem } from "@/components/ui/motion";
+import { LoadingSkeleton } from "@/components/ui/loading-skeleton";
+import { api } from "@/lib/api";
+import { formatDate } from "@/lib/utils";
+import type { HostDetail } from "@/types";
 
 export default function HostDetailPage() {
   const params = useParams();
-  const hostId = params.id as string;
   const [host, setHost] = useState<HostDetail | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const [error, setError] = useState(false);
 
   useEffect(() => {
-    loadHost();
-    const interval = window.setInterval(loadHost, 10000);
-    return () => window.clearInterval(interval);
-  }, [hostId]);
-
-  async function loadHost() {
-    try {
-      const data = await api.get<HostDetail>(`/api/hosts/${hostId}`);
-      setHost(data);
-    } catch (e: any) {
-      setError(e.message || "Failed to load host");
-    } finally {
+    async function load() {
+      try { setHost(await api.get<HostDetail>(`/api/hosts/${params.id}`)); }
+      catch { setError(true); }
       setLoading(false);
     }
-  }
+    if (!params.id) return;
+    load();
+    const interval = window.setInterval(load, 10000);
+    return () => window.clearInterval(interval);
+  }, [params.id]);
 
-  function formatTime(iso: string | null | undefined): string {
-    if (!iso) return "Never";
-    return new Date(iso).toLocaleString();
-  }
-
-  function formatUptime(seconds: number | null | undefined): string {
-    if (!seconds) return "-";
-    const days = Math.floor(seconds / 86400);
-    const hours = Math.floor((seconds % 86400) / 3600);
-    const mins = Math.floor((seconds % 3600) / 60);
-    if (days > 0) return `${days}d ${hours}h ${mins}m`;
-    return `${hours}h ${mins}m`;
-  }
-
-  if (loading) {
-    return (
-      <AppShell>
-      <div className="space-y-6">
-        <div className="h-8 w-64 animate-pulse rounded bg-gray-200" />
-        <div className="rounded-xl border border-gray-200 bg-white p-6">
-          <LoadingSkeleton rows={5} />
-        </div>
-      </div>
-      </AppShell>
-    );
-  }
-
+  if (loading) return <AppShell><LoadingSkeleton rows={4} /></AppShell>;
   if (error || !host) {
     return (
       <AppShell>
-      <div className="rounded-xl border border-red-200 bg-red-50 p-6 text-center">
-        <p className="text-sm text-red-600">{error || "Host not found"}</p>
-        <Link href="/hosts" className="mt-2 inline-block text-sm text-blue-600 hover:underline">
-          Back to Hosts
-        </Link>
-      </div>
+        <div className="rounded-lg bg-danger/10 px-4 py-3 text-[13px] text-danger">
+          Host not found. <Link href="/hosts" className="underline">Back to hosts →</Link>
+        </div>
       </AppShell>
     );
   }
 
   return (
     <AppShell>
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold text-gray-900">{host.display_name}</h1>
+      <PageTransition>
+        <div className="mb-5">
+          <Link href="/hosts" className="mb-3 inline-flex items-center gap-1 text-xs text-fgMuted hover:text-fg">
+            <ArrowLeftIcon className="h-3 w-3" /> Hosts
+          </Link>
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 className="text-lg font-semibold text-fg">{host.display_name}</h1>
             <HostStatusBadge status={host.status?.status || "UNKNOWN"} />
           </div>
-          <p className="mt-1 text-sm text-gray-500">{host.hostname}</p>
+          <p className="mt-0.5 text-xs text-fgMuted">{host.hostname}</p>
         </div>
-        <Link href="/hosts" className="text-sm text-gray-500 hover:text-gray-700">
-          Back to Hosts
-        </Link>
-      </div>
 
-      {/* Host Info Grid */}
-      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="rounded-xl border border-gray-200 bg-white p-5">
-          <p className="text-sm font-medium text-gray-500">Last Heartbeat</p>
-          <p className="mt-1 text-lg font-semibold text-gray-900">{formatTime(host.status?.last_heartbeat_at)}</p>
-        </div>
-        <div className="rounded-xl border border-gray-200 bg-white p-5">
-          <p className="text-sm font-medium text-gray-500">Uptime</p>
-          <p className="mt-1 text-lg font-semibold text-gray-900">{formatUptime(host.status?.uptime_seconds)}</p>
-        </div>
-        <div className="rounded-xl border border-gray-200 bg-white p-5">
-          <p className="text-sm font-medium text-gray-500">IP Address</p>
-          <p className="mt-1 text-lg font-semibold text-gray-900">{host.status?.ip_address || "-"}</p>
-        </div>
-        <div className="rounded-xl border border-gray-200 bg-white p-5">
-          <p className="text-sm font-medium text-gray-500">OS Version</p>
-          <p className="mt-1 text-lg font-semibold text-gray-900">{host.status?.os_version || "-"}</p>
-        </div>
-      </div>
+        <SectionStagger className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+          <div className="space-y-4 lg:col-span-2">
+            <SectionItem><Card>
+              <CardHeader><CardTitle>Details</CardTitle></CardHeader>
+              <CardContent>
+                <dl className="grid grid-cols-2 gap-x-6 gap-y-3 text-[13px] md:grid-cols-3">
+                  {[
+                    ["Environment", host.environment || "—"],
+                    ["Last heartbeat", host.status?.last_heartbeat_at ? formatDate(host.status.last_heartbeat_at) : "Never"],
+                    ["Registered", formatDate(host.created_at)],
+                  ].map(([label, value]) => (
+                    <div key={label as string}>
+                      <dt className="text-[11px] text-fgSubtle">{label}</dt>
+                      <dd className="mt-0.5 font-medium text-fg">{value}</dd>
+                    </div>
+                  ))}
+                </dl>
+              </CardContent>
+            </Card></SectionItem>
 
-      {/* Host Details Card */}
-      <div className="rounded-xl border border-gray-200 bg-white p-6">
-        <h2 className="text-lg font-semibold text-gray-900">Details</h2>
-        <dl className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <div>
-            <dt className="text-sm font-medium text-gray-500">Environment</dt>
-            <dd className="mt-1 text-sm text-gray-900">{host.environment || "Not set"}</dd>
-          </div>
-          <div>
-            <dt className="text-sm font-medium text-gray-500">Active</dt>
-            <dd className="mt-1 text-sm text-gray-900">{host.is_active ? "Yes" : "No"}</dd>
-          </div>
-          <div>
-            <dt className="text-sm font-medium text-gray-500">Heartbeat Interval</dt>
-            <dd className="mt-1 text-sm text-gray-900">{host.heartbeat_interval_seconds}s</dd>
-          </div>
-          <div>
-            <dt className="text-sm font-medium text-gray-500">Heartbeat Timeout</dt>
-            <dd className="mt-1 text-sm text-gray-900">{host.heartbeat_timeout_seconds}s</dd>
-          </div>
-          <div>
-            <dt className="text-sm font-medium text-gray-500">Consecutive Heartbeats</dt>
-            <dd className="mt-1 text-sm text-gray-900">{host.status?.consecutive_heartbeats || 0}</dd>
-          </div>
-          <div>
-            <dt className="text-sm font-medium text-gray-500">Consecutive Misses</dt>
-            <dd className="mt-1 text-sm text-gray-900">{host.status?.consecutive_misses || 0}</dd>
-          </div>
-        </dl>
-      </div>
-
-      {/* Linked Applications */}
-      <div className="rounded-xl border border-gray-200 bg-white p-6">
-        <h2 className="text-lg font-semibold text-gray-900">Linked Applications</h2>
-        {host.applications.length === 0 ? (
-          <div className="mt-4">
-            <EmptyState title="No linked applications" description="Link applications to this host to track host-caused outages." />
-          </div>
-        ) : (
-          <div className="mt-4 space-y-3">
-            {host.applications.map((app) => (
-              <Link
-                key={app.id}
-                href={`/applications/${app.id}`}
-                className="flex items-center justify-between rounded-lg border border-gray-100 p-4 transition hover:border-gray-200 hover:bg-gray-50"
-              >
-                <div>
-                  <p className="text-sm font-semibold text-gray-900">{app.display_name}</p>
-                  <p className="text-xs text-gray-500">{app.base_url}</p>
+            <SectionItem><Card>
+              <CardHeader><CardTitle>Linked applications</CardTitle></CardHeader>
+              {host.applications && host.applications.length > 0 ? (
+                <div className="divide-y divide-border">
+                  {host.applications.map((app) => (
+                    <Link key={app.id} href={`/applications/${app.id}`} className="flex items-center justify-between px-4 py-2.5 transition-colors hover:bg-surfaceRaised/40">
+                      <span className="text-[13px] font-medium text-fg">{app.display_name}</span>
+                    </Link>
+                  ))}
                 </div>
-                {app.environment && (
-                  <span className="rounded-md bg-gray-100 px-2 py-1 text-xs font-medium text-gray-600">
-                    {app.environment}
-                  </span>
-                )}
-              </Link>
-            ))}
+              ) : (
+                <CardContent className="text-center text-xs text-fgMuted">No linked applications</CardContent>
+              )}
+            </Card></SectionItem>
           </div>
-        )}
-      </div>
 
-      {/* Recent Heartbeats */}
-      <div className="rounded-xl border border-gray-200 bg-white p-6">
-        <h2 className="text-lg font-semibold text-gray-900">Recent Heartbeats</h2>
-        {host.recent_heartbeats.length === 0 ? (
-          <div className="mt-4">
-            <EmptyState title="No heartbeats received" description="Heartbeats will appear here once the host agent starts sending them." />
-          </div>
-        ) : (
-          <div className="mt-4 overflow-hidden rounded-lg border border-gray-100">
-            <table className="w-full">
-              <thead>
-                <tr className="bg-gray-50/50">
-                  <th className="px-4 py-2.5 text-left text-xs font-semibold uppercase text-gray-500">Received</th>
-                  <th className="px-4 py-2.5 text-left text-xs font-semibold uppercase text-gray-500">IP</th>
-                  <th className="px-4 py-2.5 text-left text-xs font-semibold uppercase text-gray-500">OS</th>
-                  <th className="px-4 py-2.5 text-left text-xs font-semibold uppercase text-gray-500">Uptime</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {host.recent_heartbeats.map((hb) => (
-                  <tr key={hb.id} className="text-sm text-gray-600">
-                    <td className="px-4 py-2.5">{formatTime(hb.received_at)}</td>
-                    <td className="px-4 py-2.5">{hb.ip_address || "-"}</td>
-                    <td className="px-4 py-2.5">{hb.os_version || "-"}</td>
-                    <td className="px-4 py-2.5">{formatUptime(hb.uptime_seconds)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-    </div>
+          <SectionItem><Card>
+            <CardHeader><CardTitle>Recent heartbeats</CardTitle></CardHeader>
+            {host.recent_heartbeats && host.recent_heartbeats.length > 0 ? (
+              <div className="max-h-80 overflow-y-auto">
+                <DataTableShell>
+                  <table className="w-full">
+                    <thead><tr className="border-b border-border"><Th>Time</Th><Th>IP</Th><Th>Uptime</Th></tr></thead>
+                    <tbody className="divide-y divide-border">
+                      {host.recent_heartbeats.map((hb, i) => (
+                        <tr key={i}>
+                          <Td className="text-fgMuted">{hb.received_at ? formatDate(hb.received_at) : "—"}</Td>
+                          <Td className="text-fgMuted">{hb.ip_address || "—"}</Td>
+                          <Td className="tabular-nums text-fgMuted">{hb.uptime_seconds != null ? `${Math.round(hb.uptime_seconds / 3600)}h` : "—"}</Td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </DataTableShell>
+              </div>
+            ) : (
+              <CardContent><EmptyState title="No heartbeats" description="Heartbeats appear once the host agent begins reporting." className="py-6" /></CardContent>
+            )}
+          </Card></SectionItem>
+        </SectionStagger>
+      </PageTransition>
     </AppShell>
   );
 }

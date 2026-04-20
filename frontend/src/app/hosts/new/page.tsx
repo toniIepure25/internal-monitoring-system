@@ -2,204 +2,102 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { api } from "@/lib/api";
-import { Host } from "@/types";
 import { AppShell } from "@/components/layout/app-shell";
+import { PageHeader } from "@/components/ui/page-header";
+import { Card, CardContent } from "@/components/ui/card";
+import { TextField } from "@/components/ui/text-field";
+import { SelectField } from "@/components/ui/select-field";
+import { Button } from "@/components/ui/button";
+import { PageTransition } from "@/components/ui/motion";
+import { api } from "@/lib/api";
+import type { Host } from "@/types";
 
-export default function RegisterHostPage() {
-  const router = useRouter();
-  const [hostname, setHostname] = useState("");
+export default function NewHostPage() {
   const [displayName, setDisplayName] = useState("");
+  const [hostname, setHostname] = useState("");
   const [environment, setEnvironment] = useState("");
-  const [interval, setInterval] = useState(30);
-  const [timeout, setTimeoutVal] = useState(90);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [createdHost, setCreatedHost] = useState<Host | null>(null);
+  const [createdHost, setCreatedHost] = useState<(Host & { api_key?: string }) | null>(null);
+  const router = useRouter();
 
-  async function handleSubmit(e: React.FormEvent) {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
     setError("");
-
+    setLoading(true);
     try {
-      const host = await api.post<Host>("/api/hosts", {
-        hostname,
-        display_name: displayName,
-        environment: environment || undefined,
-        heartbeat_interval_seconds: interval,
-        heartbeat_timeout_seconds: timeout,
-      });
+      const body: Record<string, string> = { display_name: displayName, hostname };
+      if (environment) body.environment = environment;
+      const host = await api.post<Host & { api_key?: string }>("/api/hosts", body);
       setCreatedHost(host);
-    } catch (e: any) {
-      setError(e.message || "Failed to register host");
-    } finally {
-      setLoading(false);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to register host");
     }
-  }
+    setLoading(false);
+  };
 
   if (createdHost) {
     return (
       <AppShell>
-      <div className="mx-auto max-w-2xl space-y-6">
-        <h1 className="text-2xl font-bold text-gray-900">Host Registered</h1>
-
-        <div className="rounded-xl border border-green-200 bg-green-50 p-6">
-          <h2 className="text-lg font-semibold text-green-900">
-            {createdHost.display_name} has been registered.
-          </h2>
-          <p className="mt-2 text-sm text-green-700">
-            Save the API key below. You&apos;ll need it to configure the host agent.
-          </p>
-        </div>
-
-        <div className="rounded-xl border border-gray-200 bg-white p-6 space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-500">Host ID</label>
-            <code className="mt-1 block rounded bg-gray-100 px-3 py-2 text-sm font-mono text-gray-800">
-              {createdHost.id}
-            </code>
+        <PageTransition>
+          <PageHeader title="Host registered" description="Your host is ready. Install the monitoring agent." />
+          <div className="mt-5 max-w-md space-y-4">
+            <Card>
+              <CardContent className="space-y-3 py-4">
+                <div>
+                  <p className="text-2xs font-medium text-fgSubtle">Host name</p>
+                  <p className="text-[13px] font-medium text-fg">{createdHost.display_name}</p>
+                </div>
+                {createdHost.api_key && (
+                  <div>
+                    <p className="text-2xs font-medium text-fgSubtle">API key (shown once)</p>
+                    <code className="mt-1 block break-all rounded bg-canvas px-2 py-1.5 font-mono text-xs text-accent">{createdHost.api_key}</code>
+                  </div>
+                )}
+                <div>
+                  <p className="text-2xs font-medium text-fgSubtle">Install snippet</p>
+                  <pre className="mt-1 overflow-x-auto rounded bg-canvas p-2 font-mono text-[11px] text-fgMuted">
+{`curl -fsSL https://monitor.example.com/install.sh | \\
+  HOST_API_KEY="${createdHost.api_key || "<YOUR_KEY>"}" bash`}
+                  </pre>
+                </div>
+              </CardContent>
+            </Card>
+            <div className="flex gap-2">
+              <Button onClick={() => router.push(`/hosts/${createdHost.id}`)}>View host</Button>
+              <Button variant="secondary" onClick={() => router.push("/hosts")}>All hosts</Button>
+            </div>
           </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-500">API Key</label>
-            <code className="mt-1 block rounded bg-yellow-50 border border-yellow-200 px-3 py-2 text-sm font-mono text-gray-800 break-all">
-              {createdHost.api_key}
-            </code>
-            <p className="mt-1 text-xs text-gray-400">Store this securely. It cannot be retrieved later.</p>
-          </div>
-        </div>
-
-        <div className="rounded-xl border border-gray-200 bg-white p-6">
-          <h3 className="text-sm font-semibold text-gray-900">Install the Agent</h3>
-          <p className="mt-2 text-sm text-gray-600">On the target Mac, run:</p>
-          <pre className="mt-3 overflow-x-auto rounded-lg bg-gray-900 px-4 py-3 text-sm text-green-400">
-{`MONITOR_SERVER_URL=http://your-server:8000 \\
-MONITOR_API_KEY=${createdHost.api_key} \\
-bash install.sh`}
-          </pre>
-          <p className="mt-3 text-xs text-gray-500">
-            See <code>host-agent/README.md</code> for full installation instructions.
-          </p>
-        </div>
-
-        <div className="flex gap-3">
-          <button
-            onClick={() => router.push(`/hosts/${createdHost.id}`)}
-            className="rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white shadow-sm transition hover:bg-blue-700"
-          >
-            View Host
-          </button>
-          <button
-            onClick={() => router.push("/hosts")}
-            className="rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
-          >
-            All Hosts
-          </button>
-        </div>
-      </div>
+        </PageTransition>
       </AppShell>
     );
   }
 
   return (
     <AppShell>
-    <div className="mx-auto max-w-2xl space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Register New Host</h1>
-        <p className="mt-1 text-sm text-gray-500">
-          Register a deployment machine to monitor its status via heartbeats.
-        </p>
-      </div>
+      <PageTransition>
+        <PageHeader title="Register host" description="Add a server or device to monitor." />
+        <form onSubmit={handleSubmit} className="mt-5 max-w-md space-y-4">
+          <Card>
+            <CardContent className="space-y-3 py-4">
+              <TextField label="Display name" value={displayName} onChange={(e) => setDisplayName(e.target.value)} required placeholder="e.g. production-server-01" />
+              <TextField label="Hostname" value={hostname} onChange={(e) => setHostname(e.target.value)} required placeholder="e.g. server-01.example.com" />
+              <SelectField label="Environment" value={environment} onChange={(e) => setEnvironment(e.target.value)} placeholder="Select…" options={[
+                { value: "production", label: "Production" },
+                { value: "staging", label: "Staging" },
+                { value: "development", label: "Development" },
+              ]} />
+            </CardContent>
+          </Card>
 
-      <form onSubmit={handleSubmit} className="space-y-6 rounded-xl border border-gray-200 bg-white p-6">
-        <div>
-          <label className="block text-sm font-medium text-gray-700">Hostname</label>
-          <input
-            type="text"
-            required
-            value={hostname}
-            onChange={(e) => setHostname(e.target.value)}
-            placeholder="e.g. mac-deploy-01"
-            className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-          />
-          <p className="mt-1 text-xs text-gray-400">Machine hostname (must be unique)</p>
-        </div>
+          {error && <p className="rounded-md bg-danger/10 px-2.5 py-2 text-xs text-danger">{error}</p>}
 
-        <div>
-          <label className="block text-sm font-medium text-gray-700">Display Name</label>
-          <input
-            type="text"
-            required
-            value={displayName}
-            onChange={(e) => setDisplayName(e.target.value)}
-            placeholder="e.g. Mac Deploy 01"
-            className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700">Environment</label>
-          <select
-            value={environment}
-            onChange={(e) => setEnvironment(e.target.value)}
-            className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-          >
-            <option value="">Select environment...</option>
-            <option value="production">Production</option>
-            <option value="staging">Staging</option>
-            <option value="development">Development</option>
-          </select>
-        </div>
-
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Heartbeat Interval (s)</label>
-            <input
-              type="number"
-              min={10}
-              max={600}
-              value={interval}
-              onChange={(e) => setInterval(parseInt(e.target.value) || 30)}
-              className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-            />
+          <div className="flex gap-2">
+            <Button type="submit" loading={loading}>Register host</Button>
+            <Button variant="secondary" type="button" onClick={() => router.back()}>Cancel</Button>
           </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Heartbeat Timeout (s)</label>
-            <input
-              type="number"
-              min={30}
-              max={1800}
-              value={timeout}
-              onChange={(e) => setTimeoutVal(parseInt(e.target.value) || 90)}
-              className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-            />
-          </div>
-        </div>
-
-        {error && (
-          <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-600">
-            {error}
-          </div>
-        )}
-
-        <div className="flex gap-3">
-          <button
-            type="submit"
-            disabled={loading}
-            className="rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white shadow-sm transition hover:bg-blue-700 disabled:opacity-50"
-          >
-            {loading ? "Registering..." : "Register Host"}
-          </button>
-          <button
-            type="button"
-            onClick={() => router.push("/hosts")}
-            className="rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
-          >
-            Cancel
-          </button>
-        </div>
-      </form>
-    </div>
+        </form>
+      </PageTransition>
     </AppShell>
   );
 }

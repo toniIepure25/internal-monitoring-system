@@ -1,116 +1,87 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
+import Link from "next/link";
 import { AppShell } from "@/components/layout/app-shell";
+import { PageHeader } from "@/components/ui/page-header";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { LoadingSkeleton } from "@/components/ui/loading-skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
+import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { PageTransition, StaggerList, StaggerItem } from "@/components/ui/motion";
+import { useToast } from "@/components/ui/toast";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import { api } from "@/lib/api";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
 import type { Subscription } from "@/types";
+
+const toggleFields = [
+  { key: "notify_on_down" as const, label: "Down" },
+  { key: "notify_on_up" as const, label: "Up" },
+  { key: "notify_on_degraded" as const, label: "Degraded" },
+  { key: "notify_on_slow" as const, label: "Slow" },
+];
 
 export default function SubscriptionsPage() {
   const [subs, setSubs] = useState<Subscription[]>([]);
   const [loading, setLoading] = useState(true);
-  const router = useRouter();
+  const toast = useToast();
+  const confirm = useConfirm();
 
-  const load = useCallback(async () => {
-    try {
-      const res = await api.get<{ items: Subscription[]; total: number }>("/api/subscriptions?limit=100");
-      setSubs(res.items);
-    } catch {}
+  async function load() {
+    try { setSubs((await api.get<{ items: Subscription[] }>("/api/subscriptions?limit=100")).items); } catch { /* noop */ }
     setLoading(false);
-  }, []);
+  }
 
-  useEffect(() => { load(); }, [load]);
-  useEffect(() => {
-    const interval = window.setInterval(load, 10000);
-    return () => window.clearInterval(interval);
-  }, [load]);
+  useEffect(() => { load(); const i = window.setInterval(load, 10000); return () => window.clearInterval(i); }, []);
 
-  const handleToggle = async (subId: string, field: string, value: boolean) => {
-    try {
-      await api.patch(`/api/subscriptions/${subId}`, { [field]: value });
-      setSubs((prev) =>
-        prev.map((s) => (s.id === subId ? { ...s, [field]: value } : s)),
-      );
-    } catch {}
+  const handleToggle = async (sub: Subscription, field: keyof Pick<Subscription, "notify_on_down" | "notify_on_up" | "notify_on_degraded" | "notify_on_slow">) => {
+    try { await api.patch(`/api/subscriptions/${sub.id}`, { [field]: !sub[field] }); toast.success("Updated"); await load(); } catch { toast.error("Failed to update"); }
   };
 
-  const handleUnsubscribe = async (subId: string) => {
-    if (!confirm("Unsubscribe from this application?")) return;
-    try {
-      await api.delete(`/api/subscriptions/${subId}`);
-      setSubs((prev) => prev.filter((s) => s.id !== subId));
-    } catch {}
+  const handleUnsubscribe = async (sub: Subscription) => {
+    const name = sub.application?.display_name || sub.application_id;
+    const ok = await confirm({ title: `Unsubscribe from ${name}?`, confirmLabel: "Unsubscribe", variant: "danger" });
+    if (!ok) return;
+    try { await api.delete(`/api/subscriptions/${sub.id}`); toast.success("Unsubscribed"); await load(); } catch { toast.error("Failed"); }
   };
 
   return (
     <AppShell>
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">My Subscriptions</h1>
-        <p className="mt-1 text-sm text-gray-500">Manage your notification preferences for subscribed applications</p>
-      </div>
-
-      {loading ? (
-        <div className="rounded-xl border border-gray-200 bg-white p-6">
-          <LoadingSkeleton rows={4} />
-        </div>
-      ) : subs.length === 0 ? (
-        <EmptyState
-          title="No subscriptions yet"
-          description="Subscribe to applications to receive notifications about their status."
-          actionLabel="Browse Applications"
-          onAction={() => router.push("/applications")}
-        />
-      ) : (
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          {subs.map((sub) => (
-            <div key={sub.id} className="rounded-xl border border-gray-200 bg-white p-5">
-              <div className="mb-4 flex items-start justify-between">
-                <div>
-                  <Link
-                    href={`/applications/${sub.application_id}`}
-                    className="text-sm font-semibold text-blue-600 hover:text-blue-700"
-                  >
-                    {(sub.application as any)?.display_name || sub.application_id}
-                  </Link>
-                  <div className="mt-1.5 flex items-center gap-2">
-                    <StatusBadge status={(sub.application as any)?.status?.status || "UNKNOWN"} />
-                    <span className="truncate text-xs text-gray-400">{(sub.application as any)?.base_url}</span>
+      <PageTransition>
+        <PageHeader eyebrow="Monitoring" title="Subscriptions" description={`${subs.length} active subscriptions`} />
+        {loading ? (
+          <div className="mt-5"><LoadingSkeleton rows={3} /></div>
+        ) : subs.length === 0 ? (
+          <div className="mt-5 rounded-lg border border-border bg-surface">
+            <EmptyState title="No subscriptions" description="Subscribe to applications to receive notifications." action={<Link href="/applications"><Button>Browse applications</Button></Link>} />
+          </div>
+        ) : (
+          <StaggerList className="mt-5 space-y-2">
+            {subs.map((sub) => (
+              <StaggerItem key={sub.id}><Card>
+                <div className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <Link href={`/applications/${sub.application_id}`} className="truncate text-[13px] font-medium text-fg hover:text-accent">{sub.application?.display_name || sub.application_id}</Link>
+                      {sub.application?.status?.status && <StatusBadge status={sub.application.status.status} />}
+                    </div>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-3">
+                    {toggleFields.map((f) => (
+                      <label key={f.key} className="flex items-center gap-1.5 text-[11px] text-fgMuted">
+                        <input type="checkbox" checked={sub[f.key]} onChange={() => handleToggle(sub, f.key)} className="h-3 w-3 rounded border-border bg-canvas text-accent focus:ring-accent/30" />
+                        {f.label}
+                      </label>
+                    ))}
+                    <Button variant="ghost" size="xs" onClick={() => handleUnsubscribe(sub)} className="text-fgSubtle hover:text-danger">Unsubscribe</Button>
                   </div>
                 </div>
-                <button
-                  onClick={() => handleUnsubscribe(sub.id)}
-                  className="rounded-lg px-3 py-1.5 text-xs font-medium text-red-600 transition hover:bg-red-50"
-                >
-                  Unsubscribe
-                </button>
-              </div>
-
-              <div className="flex flex-wrap gap-x-5 gap-y-2 border-t border-gray-100 pt-4">
-                {[
-                  { field: "notify_on_down", label: "DOWN", value: sub.notify_on_down },
-                  { field: "notify_on_up", label: "Recovery", value: sub.notify_on_up },
-                  { field: "notify_on_degraded", label: "Degraded", value: sub.notify_on_degraded },
-                  { field: "notify_on_slow", label: "Slow", value: sub.notify_on_slow },
-                ].map((toggle) => (
-                  <label key={toggle.field} className="flex cursor-pointer items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={toggle.value}
-                      onChange={(e) => handleToggle(sub.id, toggle.field, e.target.checked)}
-                      className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                    />
-                    <span className="text-sm text-gray-700">{toggle.label}</span>
-                  </label>
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
+              </Card></StaggerItem>
+            ))}
+          </StaggerList>
+        )}
+      </PageTransition>
     </AppShell>
   );
 }
