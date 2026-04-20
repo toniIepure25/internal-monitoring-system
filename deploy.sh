@@ -177,32 +177,35 @@ command -v curl >/dev/null 2>&1 \
     && success "curl available" \
     || warn "curl not found — health checks will be skipped"
 
-# On macOS, Docker Desktop credential helpers break in SSH / non-interactive sessions.
-# Copy the real config (preserves context/socket settings) but strip credential fields.
-USE_CLEAN_DOCKER_CONFIG=false
+# On macOS, Docker credential helpers (osxkeychain / desktop) break in SSH / non-interactive
+# sessions. We patch ~/.docker/config.json in place to strip credential fields, keeping
+# everything else (contexts, buildx settings, etc.) intact. A backup is restored after build.
+DOCKER_CONFIG_PATCHED=false
+DOCKER_CONFIG_BACKUP=""
 if [[ "$(uname)" == "Darwin" ]]; then
     ORIG_DOCKER_CONFIG="${HOME}/.docker/config.json"
-    CLEAN_DOCKER_DIR="$SCRIPT_DIR/.docker-build-config"
-    mkdir -p "$CLEAN_DOCKER_DIR"
-    if [[ -f "$ORIG_DOCKER_CONFIG" ]]; then
-        # Copy the original, then blank out credsStore and remove credHelpers
-        cp "$ORIG_DOCKER_CONFIG" "$CLEAN_DOCKER_DIR/config.json"
-        sed -i '' 's/"credsStore"[[:space:]]*:[[:space:]]*"[^"]*"/"credsStore": ""/g' "$CLEAN_DOCKER_DIR/config.json"
-        # Remove credHelpers block (single or multi-line)
+    if [[ -f "$ORIG_DOCKER_CONFIG" ]] && grep -q '"credsStore"\|"credHelpers"' "$ORIG_DOCKER_CONFIG" 2>/dev/null; then
+        DOCKER_CONFIG_BACKUP="${ORIG_DOCKER_CONFIG}.deploy-backup"
+        cp "$ORIG_DOCKER_CONFIG" "$DOCKER_CONFIG_BACKUP"
         python3 -c "
-import json, sys
-p = '$CLEAN_DOCKER_DIR/config.json'
+import json
+p = '${ORIG_DOCKER_CONFIG}'
 with open(p) as f: d = json.load(f)
 d.pop('credHelpers', None)
 d['credsStore'] = ''
 with open(p, 'w') as f: json.dump(d, f, indent=2)
-" 2>/dev/null || true
-        USE_CLEAN_DOCKER_CONFIG=true
-        success "Prepared credential-free Docker config for builds"
-    else
-        info "No Docker config found at $ORIG_DOCKER_CONFIG — using defaults"
+" 2>/dev/null || sed -i '' 's/"credsStore"[[:space:]]*:[[:space:]]*"[^"]*"/"credsStore": ""/g' "$ORIG_DOCKER_CONFIG"
+        DOCKER_CONFIG_PATCHED=true
+        success "Patched Docker config (stripped credential helpers, backup saved)"
     fi
 fi
+
+restore_docker_config() {
+    if [[ "$DOCKER_CONFIG_PATCHED" == true ]] && [[ -f "$DOCKER_CONFIG_BACKUP" ]]; then
+        mv "$DOCKER_CONFIG_BACKUP" "$ORIG_DOCKER_CONFIG"
+    fi
+}
+trap restore_docker_config EXIT
 
 # ── 2. Pull latest code ─────────────────────────────────────────────────────
 header "Pulling latest code"
@@ -286,13 +289,8 @@ header "Building and deploying"
 info "Building images (this may take a few minutes on first run)..."
 BUILD_START=$(date +%s)
 
-if [[ "$USE_CLEAN_DOCKER_CONFIG" == true ]]; then
-    run_logged "Docker images built" env DOCKER_CONFIG="$CLEAN_DOCKER_DIR" docker compose build --parallel \
-        || fail "Docker build failed — check the log: $LOG_FILE"
-else
-    run_logged "Docker images built" docker compose build --parallel \
-        || fail "Docker build failed — check the log: $LOG_FILE"
-fi
+run_logged "Docker images built" docker compose build --parallel \
+    || fail "Docker build failed — check the log: $LOG_FILE"
 
 BUILD_END=$(date +%s)
 info "Build completed in $((BUILD_END - BUILD_START))s"
