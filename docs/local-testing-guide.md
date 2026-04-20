@@ -8,7 +8,7 @@ The platform treats **heartbeats** as proof that a host is alive. You do **not**
 2. **Send the same HTTP request the agent would send**, from any machine that can reach your API (your laptop, a Linux box, CI, etc.):
 
 ```bash
-curl -sS -X POST "http://localhost:8000/api/hosts/heartbeat" \
+curl -sS -X POST "http://localhost:8090/api/hosts/heartbeat" \
   -H "Content-Type: application/json" \
   -H "X-Host-API-Key: YOUR_HOST_API_KEY_HERE" \
   -d '{"hostname":"demo-host-1","os_version":"curl-test","uptime_seconds":12345,"ip_address":"127.0.0.1"}'
@@ -83,13 +83,13 @@ npm install
 npm run dev
 ```
 
-Set `NEXT_PUBLIC_API_URL=http://localhost:8000` in `frontend/.env.local` if the browser must call a different API host.
+Set `NEXT_PUBLIC_API_URL=http://localhost:8090` in `frontend/.env.local` if the browser must call a different API host.
 
 ---
 
 ## Open the UI
 
-1. Browser: **http://localhost:3001/login**
+1. Browser: **http://localhost:3040/login**
 2. Sign in with e.g. `admin@company.internal` / `admin1234`
 3. Explore **Dashboard**, **All Applications**, **Hosts**, **Incidents**, **Admin**
 
@@ -132,7 +132,7 @@ curl -sS -X POST http://localhost:9000/control/reset
 ## API smoke check
 
 ```bash
-curl -sS http://localhost:8000/docs
+curl -sS http://localhost:8090/docs
 ```
 
 ---

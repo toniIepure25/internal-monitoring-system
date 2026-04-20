@@ -31,9 +31,9 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-monitor}:${POSTGRES_PASSWORD:-monitor_secret_change_me}@postgres:5432/${POSTGRES_DB:-monitor_db}
       REDIS_URL: redis://redis:6379/0
-      BACKEND_CORS_ORIGINS: '["http://localhost:3001"]'
+      BACKEND_CORS_ORIGINS: '["http://localhost:3040","https://monitoring-system.ccrolabs.com"]'
     ports:
-      - "8000:8000"
+      - "8090:8090"
     volumes:
       - ./backend:/app
     depends_on:
@@ -44,7 +44,7 @@ services:
     command: >
       sh -c "PYTHONPATH=/app alembic upgrade head &&
              PYTHONPATH=/app
-             uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+             uvicorn app.main:app --host 0.0.0.0 --port 8090 --reload"
 
   frontend:
     build:
@@ -52,9 +52,9 @@ services:
       dockerfile: Dockerfile
     env_file: .env
     environment:
-      NEXT_PUBLIC_API_URL: http://localhost:8000
+      NEXT_PUBLIC_API_URL: http://localhost:8090
     ports:
-      - "3001:3001"
+      - "3040:3040"
     volumes:
       - ./frontend:/app
       - /app/node_modules

@@ -88,27 +88,27 @@ Set up the database and start the server:
 ```bash
 cp ../.env.example ../.env       # edit DATABASE_URL, REDIS_URL for local values
 PYTHONPATH=. alembic upgrade head
-PYTHONPATH=. uvicorn app.main:app --reload --port 8000
+PYTHONPATH=. uvicorn app.main:app --reload --port 8090
 ```
 
 #### Frontend
 
 ```bash
 cd frontend
-cp .env.example .env.local       # edit if backend is not on localhost:8000
+cp .env.example .env.local       # edit if backend is not on localhost:8090
 npm install
 npm run dev
 ```
 
-The frontend runs on `http://localhost:3001` by default.
+The frontend runs on `http://localhost:3040` by default.
 
 ### Access
 
-| Service | URL |
-|---------|-----|
-| Frontend | `http://localhost:3001` |
-| Backend API | `http://localhost:8000` |
-| API docs (Swagger) | `http://localhost:8000/docs` |
+| Service | Local | Cloudflare |
+|---------|-------|------------|
+| Frontend | `http://localhost:3040` | `https://monitoring-system.ccrolabs.com` |
+| Backend API | `http://localhost:8090` | `https://monitoring-system-api.ccrolabs.com` |
+| API docs (Swagger) | `http://localhost:8090/docs` | |
 
 Demo login: `admin@company.internal` / `admin1234`
 

@@ -88,7 +88,7 @@ sudo rm -rf /etc/monitor-agent
 ## Running Manually (for testing)
 
 ```bash
-MONITOR_SERVER_URL=http://localhost:8000 \
+MONITOR_SERVER_URL=http://localhost:8090 \
 MONITOR_API_KEY=your-key \
 python3 agent.py
 ```

@@ -1,8 +1,8 @@
 # API Overview
 
-Base URL: `http://localhost:8000`
+Base URL: `http://localhost:8090`
 
-Interactive docs: `http://localhost:8000/docs`
+Interactive docs: `http://localhost:8090/docs`
 
 All endpoints except `/api/auth/register`, `/api/auth/login`, and `/api/hosts/heartbeat` require a Bearer token in the Authorization header.
 
