@@ -75,13 +75,15 @@ docker compose version >/dev/null 2>&1 \
     || fail "Docker Compose v2 is required — https://docs.docker.com/compose/install/"
 
 # On macOS, Docker Desktop credential helpers break in SSH / non-interactive sessions.
-# Use a clean Docker config directory for builds to bypass all keychain issues.
+# We prepare a clean config used ONLY for the build step (not globally, to avoid breaking
+# docker compose commands that need the daemon context).
+USE_CLEAN_DOCKER_CONFIG=false
 if [[ "$(uname)" == "Darwin" ]]; then
     CLEAN_DOCKER_DIR="$SCRIPT_DIR/.docker-build-config"
     mkdir -p "$CLEAN_DOCKER_DIR"
     echo '{}' > "$CLEAN_DOCKER_DIR/config.json"
-    export DOCKER_CONFIG="$CLEAN_DOCKER_DIR"
-    success "Using clean Docker config (bypasses macOS keychain)"
+    USE_CLEAN_DOCKER_CONFIG=true
+    success "Prepared clean Docker config (bypasses macOS keychain for builds)"
 fi
 
 # ── 2. Pull latest code ─────────────────────────────────────────────────────
@@ -159,7 +161,11 @@ fi
 header "Building and deploying"
 
 info "Building images (this may take a few minutes on first run)..."
-docker compose build --parallel 2>&1 | tail -5
+if [[ "$USE_CLEAN_DOCKER_CONFIG" == true ]]; then
+    DOCKER_CONFIG="$CLEAN_DOCKER_DIR" docker compose build --parallel 2>&1 | tail -5
+else
+    docker compose build --parallel 2>&1 | tail -5
+fi
 
 info "Starting containers..."
 docker compose up -d
