@@ -1,0 +1,51 @@
+# Environment and secrets
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.venv/
+venv/
+
+# Node / Next.js
+node_modules/
+.next/
+out/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# OS / editors
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Local tooling
+.codex
+
+# Build / temp artifacts
+dist/
+build/
+tmp/
+temp/
+
+# Runtime generated files
+backend/alembic/versions/__pycache__/
+backend/tests/__pycache__/
+backend/app/__pycache__/
+backend/app/workers/__pycache__/
+test-app/__pycache__/

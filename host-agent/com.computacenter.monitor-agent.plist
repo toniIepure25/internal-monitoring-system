@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.computacenter.monitor-agent</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/bin/python3</string>
+        <string>/usr/local/bin/monitor-agent.py</string>
+    </array>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>KeepAlive</key>
+    <true/>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>MONITOR_SERVER_URL</key>
+        <string>http://your-monitoring-server:8000</string>
+        <key>MONITOR_API_KEY</key>
+        <string>your-host-api-key-here</string>
+        <key>MONITOR_INTERVAL</key>
+        <string>30</string>
+    </dict>
+
+    <key>StandardOutPath</key>
+    <string>/var/log/monitor-agent.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>/var/log/monitor-agent.err</string>
+
+    <key>ThrottleInterval</key>
+    <integer>10</integer>
+</dict>
+</plist>
