@@ -58,10 +58,9 @@ services:
     volumes:
       - ./frontend:/app
       - /app/node_modules
-      - /app/.next
     depends_on:
       - backend
-    command: npm run dev
+    command: sh -c "rm -rf .next && npm run dev"
 
   # Optional local demo with /control/up|down. Omit this service when testing real URLs (e.g. behind Cloudflare).
   test-app:
