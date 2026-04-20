@@ -52,7 +52,7 @@ services:
       dockerfile: Dockerfile
     env_file: .env
     environment:
-      NEXT_PUBLIC_API_URL: http://localhost:8090
+      NEXT_PUBLIC_API_URL: https://monitoring-system-api.ccrolabs.com
     ports:
       - "3040:3040"
     volumes:
