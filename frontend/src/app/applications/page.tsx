@@ -55,31 +55,32 @@ export default function ApplicationsPage() {
 
   return (
     <AppShell>
-      <div className="mb-6 flex items-center justify-between">
+      <div className="page-header-panel mb-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">All Applications</h1>
-          <p className="mt-1 text-sm text-gray-500">Global catalog of monitored applications ({total})</p>
+          <p className="eyebrow-label">Application Inventory</p>
+          <h1 className="mt-2 text-3xl font-semibold">All Applications</h1>
+          <p className="mt-2 text-sm text-slate-600">Global catalog of monitored applications with current health and response time visibility. ({total})</p>
         </div>
         <Link
           href="/applications/new"
-          className="rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white shadow-sm transition hover:bg-blue-700"
+          className="primary-button"
         >
           Add Application
         </Link>
       </div>
 
-      <div className="mb-6">
+      <div className="surface-panel mb-6">
         <input
           type="text"
           placeholder="Search applications..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="w-full max-w-md rounded-lg border border-gray-300 px-3 py-2 text-sm placeholder-gray-400 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          className="filter-input max-w-md"
         />
       </div>
 
       {loading ? (
-        <div className="rounded-xl border border-gray-200 bg-white p-6">
+        <div className="surface-panel">
           <TableSkeleton cols={5} rows={5} />
         </div>
       ) : apps.length === 0 ? (
@@ -90,52 +91,52 @@ export default function ApplicationsPage() {
           onAction={search ? undefined : () => router.push("/applications/new")}
         />
       ) : (
-        <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
+        <div className="table-surface">
           <table className="w-full">
             <thead>
-              <tr className="border-b border-gray-100 bg-gray-50/50">
-                <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Name</th>
-                <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">URL</th>
-                <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Env</th>
-                <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Status</th>
-                <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Response</th>
-                <th className="px-5 py-3 text-right text-xs font-semibold uppercase tracking-wider text-gray-500">Actions</th>
+              <tr className="border-b border-slate-200/80 bg-slate-50/80">
+                <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Name</th>
+                <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">URL</th>
+                <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Env</th>
+                <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Status</th>
+                <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Response</th>
+                <th className="px-5 py-3 text-right text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-50">
+            <tbody className="divide-y divide-slate-100">
               {apps.map((app) => (
-                <tr key={app.id} className="transition-colors hover:bg-gray-50/50">
+                <tr key={app.id} className="transition-colors hover:bg-slate-50/60">
                   <td className="px-5 py-3.5">
                     <Link href={`/applications/${app.id}`} className="text-sm font-semibold text-blue-600 hover:text-blue-700">
                       {app.display_name}
                     </Link>
                     {app.is_maintenance && (
-                      <span className="ml-2 rounded bg-orange-50 px-1.5 py-0.5 text-xs text-orange-600">
+                      <span className="ml-2 rounded-full bg-orange-50 px-2 py-1 text-xs font-medium text-orange-700 ring-1 ring-inset ring-orange-200">
                         Maintenance
                       </span>
                     )}
                   </td>
-                  <td className="max-w-xs truncate px-5 py-3.5 text-sm text-gray-500">{app.base_url}</td>
+                  <td className="max-w-xs truncate px-5 py-3.5 text-sm text-slate-500">{app.base_url}</td>
                   <td className="px-5 py-3.5">
                     {app.environment ? (
-                      <span className="rounded-md bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600">
+                      <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600 ring-1 ring-inset ring-slate-200">
                         {app.environment}
                       </span>
                     ) : (
-                      <span className="text-sm text-gray-400">-</span>
+                      <span className="text-sm text-slate-400">-</span>
                     )}
                   </td>
                   <td className="px-5 py-3.5">
                     <StatusBadge status={app.status?.status || "UNKNOWN"} />
                   </td>
-                  <td className="px-5 py-3.5 text-sm text-gray-500">
+                  <td className="px-5 py-3.5 text-sm text-slate-500">
                     {app.status?.last_response_time_ms != null ? `${app.status.last_response_time_ms}ms` : "-"}
                   </td>
                   <td className="px-5 py-3.5 text-right">
                     <button
                       onClick={() => handleDelete(app.id, app.display_name)}
                       disabled={deletingId === app.id}
-                      className="rounded-lg px-3 py-1.5 text-xs font-medium text-red-600 transition hover:bg-red-50 disabled:opacity-50"
+                      className="rounded-xl px-3 py-1.5 text-xs font-medium text-rose-700 transition hover:bg-rose-50 disabled:opacity-50"
                     >
                       {deletingId === app.id ? "Deleting..." : "Delete"}
                     </button>
@@ -144,7 +145,7 @@ export default function ApplicationsPage() {
               ))}
             </tbody>
           </table>
-          <div className="border-t border-gray-100 bg-gray-50/50 px-5 py-3 text-xs text-gray-500">
+          <div className="border-t border-slate-200/80 bg-slate-50/70 px-5 py-3 text-xs text-slate-500">
             Showing {apps.length} of {total} applications
           </div>
         </div>

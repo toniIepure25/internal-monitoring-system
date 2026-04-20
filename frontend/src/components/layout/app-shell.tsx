@@ -29,10 +29,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   if (!user) return null;
 
   return (
-    <div className="min-h-screen flex bg-gray-50">
+    <div className="min-h-screen bg-transparent lg:flex">
       <Sidebar />
       <main className="flex-1 overflow-auto">
-        <div className="max-w-7xl mx-auto px-6 py-8">{children}</div>
+        <div className="mx-auto max-w-7xl px-4 py-4 sm:px-6 sm:py-6 lg:px-8 lg:py-8">
+          {children}
+        </div>
       </main>
     </div>
   );

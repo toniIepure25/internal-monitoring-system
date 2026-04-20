@@ -36,24 +36,25 @@ export default function IncidentsPage() {
 
   return (
     <AppShell>
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Incidents</h1>
-        <p className="mt-1 text-sm text-gray-500">
+      <div className="page-header-panel mb-6">
+        <p className="eyebrow-label">Incident Timeline</p>
+        <h1 className="mt-2 text-3xl font-semibold">Incidents</h1>
+        <p className="mt-2 text-sm text-slate-600">
           History of state transitions and alerts ({total} total)
         </p>
       </div>
 
-      <div className="mb-6 flex flex-wrap gap-4">
+      <div className="surface-panel mb-6 flex flex-wrap gap-4">
         <div className="flex gap-2">
-          <span className="flex items-center text-xs font-medium text-gray-500">Status:</span>
+          <span className="flex items-center text-xs font-medium uppercase tracking-[0.16em] text-slate-500">Status</span>
           {["", "ONGOING", "RESOLVED"].map((s) => (
             <button
               key={s}
               onClick={() => setStatusFilter(s)}
-              className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+              className={`rounded-xl px-3 py-1.5 text-sm font-medium transition-colors ${
                 statusFilter === s
-                  ? "bg-gray-900 text-white"
-                  : "border border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
+                  ? "bg-slate-900 text-white"
+                  : "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
               }`}
             >
               {s || "All"}
@@ -61,15 +62,15 @@ export default function IncidentsPage() {
           ))}
         </div>
         <div className="flex gap-2">
-          <span className="flex items-center text-xs font-medium text-gray-500">Type:</span>
+          <span className="flex items-center text-xs font-medium uppercase tracking-[0.16em] text-slate-500">Type</span>
           {["", "APPLICATION", "HOST", "HOST_CAUSED"].map((t) => (
             <button
               key={t}
               onClick={() => setTypeFilter(t)}
-              className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+              className={`rounded-xl px-3 py-1.5 text-sm font-medium transition-colors ${
                 typeFilter === t
-                  ? "bg-gray-900 text-white"
-                  : "border border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
+                  ? "bg-slate-900 text-white"
+                  : "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
               }`}
             >
               {t === "" ? "All" : t === "HOST_CAUSED" ? "Host-Caused" : t.charAt(0) + t.slice(1).toLowerCase()}
@@ -79,7 +80,7 @@ export default function IncidentsPage() {
       </div>
 
       {loading ? (
-        <div className="rounded-xl border border-gray-200 bg-white p-6">
+        <div className="surface-panel">
           <TableSkeleton cols={6} rows={5} />
         </div>
       ) : incidents.length === 0 ? (
@@ -88,24 +89,24 @@ export default function IncidentsPage() {
           description="Adjust your filters or wait for state transitions to create incidents."
         />
       ) : (
-        <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
+        <div className="table-surface">
           <table className="w-full">
             <thead>
-              <tr className="border-b border-gray-100 bg-gray-50/50">
-                <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Incident</th>
-                <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Type</th>
-                <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Severity</th>
-                <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Transition</th>
-                <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Status</th>
-                <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Started</th>
+              <tr className="border-b border-slate-200/80 bg-slate-50/80">
+                <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Incident</th>
+                <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Type</th>
+                <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Severity</th>
+                <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Transition</th>
+                <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Status</th>
+                <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Started</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-50">
+            <tbody className="divide-y divide-slate-100">
               {incidents.map((inc) => (
-                <tr key={inc.id} className="transition-colors hover:bg-gray-50/50">
+                <tr key={inc.id} className="transition-colors hover:bg-slate-50/60">
                   <td className="px-5 py-3.5">
                     <p className="text-sm font-medium text-gray-900">{inc.title}</p>
-                    <p className="mt-0.5 text-xs text-gray-400">
+                    <p className="mt-0.5 text-xs text-slate-400">
                       {inc.application_name || inc.host_name || "-"}
                     </p>
                   </td>
@@ -120,40 +121,40 @@ export default function IncidentsPage() {
                       {inc.incident_type === "HOST" || inc.incident_type === "HOST_CAUSED" ? (
                         <>
                           <HostStatusBadge status={inc.previous_state} />
-                          <span className="text-gray-400">&rarr;</span>
-                          <HostStatusBadge status={inc.new_state} />
-                        </>
-                      ) : (
-                        <>
-                          <StatusBadge status={inc.previous_state} />
-                          <span className="text-gray-400">&rarr;</span>
-                          <StatusBadge status={inc.new_state} />
-                        </>
-                      )}
-                    </div>
-                  </td>
+                      <span className="text-slate-400">&rarr;</span>
+                      <HostStatusBadge status={inc.new_state} />
+                    </>
+                  ) : (
+                    <>
+                      <StatusBadge status={inc.previous_state} />
+                      <span className="text-slate-400">&rarr;</span>
+                      <StatusBadge status={inc.new_state} />
+                    </>
+                  )}
+                  </div>
+                </td>
                   <td className="px-5 py-3.5">
                     <span
-                      className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                      className={`rounded-full px-2.5 py-1 text-xs font-medium ${
                         inc.status === "ONGOING"
-                          ? "bg-red-50 text-red-700"
-                          : "bg-green-50 text-green-700"
+                          ? "bg-rose-50 text-rose-700 ring-1 ring-inset ring-rose-200"
+                          : "bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-200"
                       }`}
                     >
                       {inc.status}
                     </span>
                   </td>
                   <td className="px-5 py-3.5">
-                    <p className="text-sm text-gray-600">{formatDate(inc.started_at)}</p>
+                    <p className="text-sm text-slate-600">{formatDate(inc.started_at)}</p>
                     {inc.resolved_at && (
-                      <p className="text-xs text-gray-400">Resolved: {formatDate(inc.resolved_at)}</p>
+                      <p className="text-xs text-slate-400">Resolved: {formatDate(inc.resolved_at)}</p>
                     )}
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
-          <div className="border-t border-gray-100 bg-gray-50/50 px-5 py-3 text-xs text-gray-500">
+          <div className="border-t border-slate-200/80 bg-slate-50/70 px-5 py-3 text-xs text-slate-500">
             Showing {incidents.length} of {total} incidents
           </div>
         </div>

@@ -149,6 +149,7 @@ export interface NotificationLogEntry {
   channel_type: ChannelType;
   status: DeliveryStatus;
   title?: string | null;
+  application_id?: string | null;
   application_name?: string | null;
   host_name?: string | null;
   error_message?: string | null;

@@ -25,70 +25,77 @@ export function Sidebar() {
   const { user, logout } = useAuth();
 
   return (
-    <aside className="w-64 bg-white border-r border-gray-200 flex flex-col min-h-screen">
-      <div className="p-6 border-b border-gray-200">
-        <h1 className="text-lg font-bold text-gray-900">Monitor</h1>
-        <p className="text-xs text-gray-500 mt-0.5">Internal Monitoring System</p>
+    <aside className="min-h-screen w-full shrink-0 border-r border-slate-200/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.95),rgba(241,245,249,0.92))] px-4 py-5 shadow-[inset_-1px_0_0_rgba(148,163,184,0.16)] lg:w-72">
+      <div className="rounded-3xl border border-slate-200/80 bg-white/90 p-5 shadow-[0_18px_40px_-28px_rgba(15,23,42,0.35)]">
+        <div className="flex items-center gap-3">
+          <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[linear-gradient(135deg,#0f172a,#2563eb)] text-sm font-bold text-white shadow-[0_18px_30px_-20px_rgba(37,99,235,0.8)]">
+            IM
+          </div>
+          <div>
+            <h1 className="text-base font-semibold text-slate-950">Internal Monitor</h1>
+            <p className="mt-0.5 text-xs text-slate-500">Operations visibility workspace</p>
+          </div>
+        </div>
       </div>
 
-      <nav className="flex-1 p-4 space-y-1">
+      <nav className="flex-1 space-y-1 px-2 py-6">
         {navItems.map((item) => (
           <Link
             key={item.href}
             href={item.href}
             className={cn(
-              "flex items-center gap-3 px-3 py-2 text-sm rounded-lg transition-colors",
+              "flex items-center gap-3 rounded-2xl px-4 py-3 text-sm transition-all",
               pathname.startsWith(item.href)
-                ? "bg-brand-50 text-brand-700 font-medium"
-                : "text-gray-600 hover:bg-gray-50 hover:text-gray-900",
+                ? "bg-[linear-gradient(135deg,rgba(219,234,254,0.95),rgba(239,246,255,0.95))] text-sky-800 shadow-[0_14px_30px_-24px_rgba(37,99,235,0.65)] ring-1 ring-inset ring-sky-200"
+                : "text-slate-600 hover:bg-white/80 hover:text-slate-900",
             )}
           >
-            <svg className="w-5 h-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+            <svg className="h-5 w-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.6}>
               <path strokeLinecap="round" strokeLinejoin="round" d={item.icon} />
             </svg>
-            {item.label}
+            <span className="font-medium">{item.label}</span>
           </Link>
         ))}
 
         {user?.role === "admin" && (
           <>
-            <div className="pt-4 pb-2">
-              <p className="px-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">Admin</p>
+            <div className="pb-2 pt-5">
+              <p className="px-4 text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400">Admin</p>
             </div>
             {adminItems.map((item) => (
               <Link
                 key={item.href}
                 href={item.href}
                 className={cn(
-                  "flex items-center gap-3 px-3 py-2 text-sm rounded-lg transition-colors",
+                  "flex items-center gap-3 rounded-2xl px-4 py-3 text-sm transition-all",
                   pathname.startsWith(item.href)
-                    ? "bg-brand-50 text-brand-700 font-medium"
-                    : "text-gray-600 hover:bg-gray-50 hover:text-gray-900",
+                    ? "bg-[linear-gradient(135deg,rgba(219,234,254,0.95),rgba(239,246,255,0.95))] text-sky-800 shadow-[0_14px_30px_-24px_rgba(37,99,235,0.65)] ring-1 ring-inset ring-sky-200"
+                    : "text-slate-600 hover:bg-white/80 hover:text-slate-900",
                 )}
               >
-                <svg className="w-5 h-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <svg className="h-5 w-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.6}>
                   <path strokeLinecap="round" strokeLinejoin="round" d={item.icon} />
                 </svg>
-                {item.label}
+                <span className="font-medium">{item.label}</span>
               </Link>
             ))}
           </>
         )}
       </nav>
 
-      <div className="p-4 border-t border-gray-200">
-        <div className="flex items-center gap-3 mb-3">
-          <div className="w-8 h-8 rounded-full bg-brand-100 flex items-center justify-center text-brand-700 text-sm font-semibold">
+      <div className="rounded-3xl border border-slate-200/80 bg-white/92 p-4 shadow-[0_18px_40px_-28px_rgba(15,23,42,0.35)]">
+        <div className="mb-3 flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[linear-gradient(135deg,#dbeafe,#eff6ff)] text-sm font-semibold text-sky-800 ring-1 ring-inset ring-sky-200">
             {user?.display_name?.charAt(0)?.toUpperCase() || "?"}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-gray-900 truncate">{user?.display_name}</p>
-            <p className="text-xs text-gray-500 truncate">{user?.email}</p>
+            <p className="truncate text-sm font-semibold text-slate-900">{user?.display_name}</p>
+            <p className="truncate text-xs text-slate-500">{user?.email}</p>
           </div>
         </div>
         <button
           onClick={logout}
-          className="w-full text-left px-3 py-2 text-sm text-gray-600 hover:bg-gray-50 rounded-lg transition-colors"
+          className="secondary-button w-full justify-start"
         >
           Sign out
         </button>

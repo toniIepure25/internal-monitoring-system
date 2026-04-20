@@ -2,7 +2,7 @@ from uuid import UUID
 from datetime import datetime, timezone
 from typing import Optional
 
-from sqlalchemy import select, func
+from sqlalchemy import select, func, delete, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -251,21 +251,126 @@ async def dispatch_incident_notifications(
 
 
 async def list_notification_log(
-    db: AsyncSession, user_id: UUID, offset: int = 0, limit: int = 50,
+    db: AsyncSession,
+    user_id: UUID,
+    offset: int = 0,
+    limit: int = 50,
+    channel_type: str | None = None,
+    status: str | None = None,
+    application_id: UUID | None = None,
+    date_from: datetime | None = None,
+    date_to: datetime | None = None,
+    search: str | None = None,
 ) -> tuple[list[NotificationLog], int]:
+    filters = [NotificationLog.user_id == user_id]
+
+    if channel_type:
+        try:
+            filters.append(NotificationLog.channel_type == ChannelType(channel_type))
+        except ValueError as exc:
+            raise ValueError("Invalid channel type filter") from exc
+
+    if status:
+        try:
+            filters.append(NotificationLog.status == DeliveryStatus(status))
+        except ValueError as exc:
+            raise ValueError("Invalid delivery status filter") from exc
+
+    if application_id:
+        filters.append(Incident.application_id == application_id)
+
+    if date_from:
+        filters.append(NotificationLog.created_at >= date_from)
+
+    if date_to:
+        filters.append(NotificationLog.created_at < date_to)
+
+    search_term = search.strip() if search else ""
+    if search_term:
+        pattern = f"%{search_term}%"
+        filters.append(
+            or_(
+                NotificationLog.error_message.ilike(pattern),
+                Incident.title.ilike(pattern),
+            )
+        )
+
     query = (
         select(NotificationLog)
+        .outerjoin(NotificationLog.incident)
         .options(
             selectinload(NotificationLog.incident).selectinload(Incident.application),
             selectinload(NotificationLog.incident).selectinload(Incident.host),
         )
-        .where(NotificationLog.user_id == user_id)
+        .where(*filters)
         .order_by(NotificationLog.created_at.desc())
         .offset(offset)
         .limit(limit)
     )
-    count_query = select(func.count(NotificationLog.id)).where(NotificationLog.user_id == user_id)
+    count_query = (
+        select(func.count(NotificationLog.id))
+        .select_from(NotificationLog)
+        .outerjoin(NotificationLog.incident)
+        .where(*filters)
+    )
 
     result = await db.execute(query)
     total_result = await db.execute(count_query)
     return list(result.scalars().all()), total_result.scalar_one()
+
+
+async def clear_notification_log(
+    db: AsyncSession,
+    user_id: UUID,
+    channel_type: str | None = None,
+    status: str | None = None,
+    application_id: UUID | None = None,
+    date_from: datetime | None = None,
+    date_to: datetime | None = None,
+    search: str | None = None,
+) -> int:
+    query = (
+        select(NotificationLog.id)
+        .outerjoin(NotificationLog.incident)
+        .where(NotificationLog.user_id == user_id)
+    )
+
+    if channel_type:
+        try:
+            query = query.where(NotificationLog.channel_type == ChannelType(channel_type))
+        except ValueError as exc:
+            raise ValueError("Invalid channel type filter") from exc
+
+    if status:
+        try:
+            query = query.where(NotificationLog.status == DeliveryStatus(status))
+        except ValueError as exc:
+            raise ValueError("Invalid delivery status filter") from exc
+
+    if application_id:
+        query = query.where(Incident.application_id == application_id)
+
+    if date_from:
+        query = query.where(NotificationLog.created_at >= date_from)
+
+    if date_to:
+        query = query.where(NotificationLog.created_at < date_to)
+
+    search_term = search.strip() if search else ""
+    if search_term:
+        pattern = f"%{search_term}%"
+        query = query.where(
+            or_(
+                NotificationLog.error_message.ilike(pattern),
+                Incident.title.ilike(pattern),
+            )
+        )
+
+    result = await db.execute(query)
+    log_ids = list(result.scalars().all())
+    if not log_ids:
+        return 0
+
+    await db.execute(delete(NotificationLog).where(NotificationLog.id.in_(log_ids)))
+    await db.flush()
+    return len(log_ids)

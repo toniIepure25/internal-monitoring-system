@@ -34,6 +34,7 @@ class NotificationLogResponse(BaseModel):
     channel_type: str
     status: str
     title: Optional[str] = None
+    application_id: Optional[str] = None
     application_name: Optional[str] = None
     host_name: Optional[str] = None
     error_message: Optional[str]
@@ -47,3 +48,7 @@ class NotificationLogResponse(BaseModel):
 class NotificationLogListResponse(BaseModel):
     items: List[NotificationLogResponse]
     total: int
+
+
+class ClearNotificationLogResponse(BaseModel):
+    deleted: int

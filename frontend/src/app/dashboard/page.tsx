@@ -52,9 +52,10 @@ export default function DashboardPage() {
 
   return (
     <AppShell>
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
-        <p className="mt-1 text-sm text-gray-500">Overview of monitored applications, hosts, and recent activity</p>
+      <div className="page-header-panel mb-8">
+        <p className="eyebrow-label">Operations Overview</p>
+        <h1 className="mt-2 text-3xl font-semibold">Dashboard</h1>
+        <p className="mt-2 max-w-2xl text-sm text-slate-600">Overview of monitored applications, hosts, and recent activity across your environment.</p>
       </div>
 
       {loading ? (
@@ -105,7 +106,7 @@ export default function DashboardPage() {
                   <Link
                     key={host.id}
                     href={`/hosts/${host.id}`}
-                    className="flex items-center justify-between rounded-xl border border-gray-200 bg-white p-4 transition hover:shadow-sm"
+                    className="flex items-center justify-between rounded-3xl border border-slate-200/80 bg-white/92 p-4 shadow-[0_18px_45px_-34px_rgba(15,23,42,0.22)] transition hover:-translate-y-0.5 hover:shadow-[0_22px_50px_-32px_rgba(15,23,42,0.32)]"
                   >
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-semibold text-gray-900">{host.display_name}</p>
@@ -124,8 +125,8 @@ export default function DashboardPage() {
               <h2 className="mb-4 text-lg font-semibold text-gray-900">My Groups</h2>
               <div className="space-y-4">
                 {groups.map((group) => (
-                  <div key={group.id} className="overflow-hidden rounded-xl border border-gray-200 bg-white">
-                    <div className="flex items-center gap-2 border-b border-gray-100 px-5 py-3">
+                  <div key={group.id} className="overflow-hidden rounded-3xl border border-slate-200/80 bg-white/92 shadow-[0_18px_45px_-34px_rgba(15,23,42,0.22)]">
+                    <div className="flex items-center gap-2 border-b border-slate-200/80 px-5 py-3">
                       {group.color && (
                         <span className="h-3 w-3 rounded-full" style={{ backgroundColor: group.color }} />
                       )}
@@ -173,7 +174,7 @@ export default function DashboardPage() {
               <Link href="/incidents" className="text-sm text-blue-600 hover:text-blue-700">View all</Link>
             </div>
             {recentIncidents.length > 0 ? (
-              <div className="divide-y divide-gray-100 overflow-hidden rounded-xl border border-gray-200 bg-white">
+              <div className="divide-y divide-slate-100 overflow-hidden rounded-3xl border border-slate-200/80 bg-white/92 shadow-[0_18px_45px_-34px_rgba(15,23,42,0.22)]">
                 {recentIncidents.map((inc) => (
                   <div key={inc.id} className="flex items-center justify-between px-5 py-3.5">
                     <div className="min-w-0 flex-1">
@@ -217,7 +218,7 @@ export default function DashboardPage() {
                   <Link
                     key={app.id}
                     href={`/applications/${app.id}`}
-                    className="rounded-xl border border-gray-200 bg-white p-4 transition-shadow hover:shadow-sm"
+                    className="rounded-3xl border border-slate-200/80 bg-white/92 p-4 shadow-[0_18px_45px_-34px_rgba(15,23,42,0.22)] transition hover:-translate-y-0.5 hover:shadow-[0_22px_50px_-32px_rgba(15,23,42,0.32)]"
                   >
                     <div className="mb-2 flex items-start justify-between">
                       <h3 className="truncate pr-2 text-sm font-medium text-gray-900">{app.display_name}</h3>

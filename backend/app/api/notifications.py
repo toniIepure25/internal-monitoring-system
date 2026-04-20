@@ -1,4 +1,5 @@
 from uuid import UUID
+from datetime import date, datetime, time, timedelta, timezone
 
 from fastapi import APIRouter, HTTPException, Query, status
 
@@ -6,10 +7,21 @@ from app.api.deps import DbSession, CurrentUser
 from app.schemas.notification import (
     CreateChannelRequest, UpdateChannelRequest, ChannelResponse,
     TestNotificationRequest, NotificationLogResponse, NotificationLogListResponse,
+    ClearNotificationLogResponse,
 )
 from app.services import notification_service
 
 router = APIRouter()
+
+
+def _day_bounds(day: date | None, *, end_exclusive: bool = False) -> datetime | None:
+    if day is None:
+        return None
+
+    if end_exclusive:
+        day = day + timedelta(days=1)
+
+    return datetime.combine(day, time.min, tzinfo=timezone.utc)
 
 
 def _serialize_channel(ch) -> dict:
@@ -71,10 +83,29 @@ async def list_notification_log(
     db: DbSession, current_user: CurrentUser,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
+    channel_type: str | None = Query(None),
+    status_filter: str | None = Query(None, alias="status"),
+    application_id: UUID | None = Query(None),
+    date_from: date | None = Query(None),
+    date_to: date | None = Query(None),
+    search: str | None = Query(None, min_length=1),
 ):
-    logs, total = await notification_service.list_notification_log(
-        db, current_user.id, offset=offset, limit=limit,
-    )
+    try:
+        logs, total = await notification_service.list_notification_log(
+            db,
+            current_user.id,
+            offset=offset,
+            limit=limit,
+            channel_type=channel_type,
+            status=status_filter,
+            application_id=application_id,
+            date_from=_day_bounds(date_from),
+            date_to=_day_bounds(date_to, end_exclusive=True),
+            search=search,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
     items = [
         {
             "id": str(log.id),
@@ -82,6 +113,11 @@ async def list_notification_log(
             "channel_type": log.channel_type.value if hasattr(log.channel_type, "value") else log.channel_type,
             "status": log.status.value if hasattr(log.status, "value") else log.status,
             "title": log.incident.title if getattr(log, "incident", None) else "Test notification",
+            "application_id": (
+                str(log.incident.application_id)
+                if getattr(log, "incident", None) and getattr(log.incident, "application_id", None)
+                else None
+            ),
             "application_name": (
                 log.incident.application.display_name
                 if getattr(log, "incident", None) and getattr(log.incident, "application", None)
@@ -100,3 +136,31 @@ async def list_notification_log(
         for log in logs
     ]
     return {"items": items, "total": total}
+
+
+@router.delete("/log", response_model=ClearNotificationLogResponse)
+async def clear_notification_log(
+    db: DbSession,
+    current_user: CurrentUser,
+    channel_type: str | None = Query(None),
+    status_filter: str | None = Query(None, alias="status"),
+    application_id: UUID | None = Query(None),
+    date_from: date | None = Query(None),
+    date_to: date | None = Query(None),
+    search: str | None = Query(None, min_length=1),
+):
+    try:
+        deleted = await notification_service.clear_notification_log(
+            db,
+            current_user.id,
+            channel_type=channel_type,
+            status=status_filter,
+            application_id=application_id,
+            date_from=_day_bounds(date_from),
+            date_to=_day_bounds(date_to, end_exclusive=True),
+            search=search,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+    return {"deleted": deleted}
