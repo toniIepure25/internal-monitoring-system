@@ -118,8 +118,56 @@ command -v docker >/dev/null 2>&1 \
     && success "docker $(docker --version | awk '{print $3}' | tr -d ',')" \
     || fail "Docker is not installed — https://docs.docker.com/get-docker/"
 
-docker info >/dev/null 2>&1 \
-    || fail "Docker daemon is not running — start Docker Desktop first"
+if ! docker info >/dev/null 2>&1; then
+    warn "Docker daemon is not responding — attempting restart..."
+    if [[ "$(uname)" == "Darwin" ]]; then
+        killall Docker 2>/dev/null || true
+        sleep 2
+        open -a Docker
+        info "Waiting for Docker Desktop to start (up to 60s)..."
+        DOCKER_WAIT=0
+        while ! docker info >/dev/null 2>&1; do
+            sleep 3
+            DOCKER_WAIT=$((DOCKER_WAIT + 3))
+            if [[ $DOCKER_WAIT -ge 60 ]]; then
+                fail "Docker daemon did not start after 60s — open Docker Desktop manually"
+            fi
+            printf "  ${DIM}waiting... %ds${NC}\n" "$DOCKER_WAIT"
+        done
+        success "Docker Desktop restarted"
+    else
+        fail "Docker daemon is not running — start Docker first"
+    fi
+fi
+
+# Verify the daemon is actually healthy (catches 500 errors on the socket)
+DOCKER_PING=$(docker system info --format '{{.ServerVersion}}' 2>&1) || true
+if [[ -z "$DOCKER_PING" ]] || echo "$DOCKER_PING" | grep -qi "error\|500"; then
+    warn "Docker daemon returned an error — restarting Docker Desktop..."
+    if [[ "$(uname)" == "Darwin" ]]; then
+        killall Docker 2>/dev/null || true
+        sleep 3
+        open -a Docker
+        info "Waiting for Docker Desktop to recover (up to 90s)..."
+        DOCKER_WAIT=0
+        while true; do
+            sleep 5
+            DOCKER_WAIT=$((DOCKER_WAIT + 5))
+            if docker system info --format '{{.ServerVersion}}' >/dev/null 2>&1; then
+                break
+            fi
+            if [[ $DOCKER_WAIT -ge 90 ]]; then
+                fail "Docker daemon still unhealthy after restart — check Docker Desktop"
+            fi
+            printf "  ${DIM}waiting... %ds${NC}\n" "$DOCKER_WAIT"
+        done
+        success "Docker Desktop recovered ($(docker system info --format '{{.ServerVersion}}' 2>/dev/null))"
+    else
+        fail "Docker daemon is unhealthy — restart Docker and try again"
+    fi
+else
+    success "Docker daemon healthy (engine $DOCKER_PING)"
+fi
 
 docker compose version >/dev/null 2>&1 \
     && success "docker compose $(docker compose version --short)" \
