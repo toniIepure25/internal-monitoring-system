@@ -74,6 +74,27 @@ docker compose version >/dev/null 2>&1 \
     && success "docker compose $(docker compose version --short)" \
     || fail "Docker Compose v2 is required — https://docs.docker.com/compose/install/"
 
+# On macOS, Docker Desktop uses the keychain for credentials.
+# If the keychain is locked (SSH sessions, remote access, etc.) builds will fail.
+# Detect and fix by switching to the default credential store.
+if [[ "$(uname)" == "Darwin" ]]; then
+    DOCKER_CONFIG="${HOME}/.docker/config.json"
+    if [[ -f "$DOCKER_CONFIG" ]] && grep -q "osxkeychain\|desktop" "$DOCKER_CONFIG" 2>/dev/null; then
+        if ! security show-keychain-info ~/Library/Keychains/login.keychain-db >/dev/null 2>&1; then
+            warn "macOS keychain is locked — Docker credential store may fail"
+            info "Switching Docker config to use default credential store..."
+            if [[ "$(uname)" == "Darwin" ]]; then
+                sed -i '' 's/"credsStore"[[:space:]]*:[[:space:]]*"[^"]*"/"credsStore": ""/g' "$DOCKER_CONFIG"
+            else
+                sed -i 's/"credsStore"[[:space:]]*:[[:space:]]*"[^"]*"/"credsStore": ""/g' "$DOCKER_CONFIG"
+            fi
+            success "Docker credential store switched to default (no keychain)"
+        else
+            success "macOS keychain accessible"
+        fi
+    fi
+fi
+
 # ── 2. Pull latest code ─────────────────────────────────────────────────────
 header "Pulling latest code"
 
