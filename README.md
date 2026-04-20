@@ -38,7 +38,34 @@ It combines smart health endpoint discovery, continuous polling, incident tracki
   - PostgreSQL 15+
   - Redis
 
-### Start with Docker (recommended)
+### One-command deploy (recommended)
+
+```bash
+sh deploy.sh
+```
+
+This script handles everything automatically:
+
+- Checks that Git, Docker, and Docker Compose are installed and running
+- Pulls the latest code from the current branch
+- Creates `.env` from `.env.example` if it doesn't exist
+- Generates a random `SECRET_KEY` if one hasn't been set
+- Detects already-running containers and rebuilds them
+- Builds all Docker images in parallel
+- Starts the full stack (Postgres, Redis, backend, frontend, test app)
+- Waits for health checks to pass on each service
+- Prints a status summary with URLs
+
+Other commands:
+
+```bash
+sh deploy.sh --status   # Show container status
+sh deploy.sh --logs     # Tail live logs from all services
+sh deploy.sh --down     # Stop and remove all containers
+sh deploy.sh            # Redeploy / pull latest and rebuild
+```
+
+### Start with Docker (manual)
 
 ```bash
 cp .env.example .env
@@ -218,6 +245,7 @@ frontend/     Next.js application and UI components
 docs/         Architecture and functional notes
 host-agent/   Host heartbeat agent assets
 test-app/     Demo application used for local monitoring tests
+deploy.sh     One-command deploy script (Docker)
 ```
 
 ## Documentation
