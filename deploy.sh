@@ -177,35 +177,32 @@ command -v curl >/dev/null 2>&1 \
     && success "curl available" \
     || warn "curl not found — health checks will be skipped"
 
-# On macOS, Docker credential helpers (osxkeychain / desktop) break in SSH / non-interactive
-# sessions. We patch ~/.docker/config.json in place to strip credential fields, keeping
-# everything else (contexts, buildx settings, etc.) intact. A backup is restored after build.
-DOCKER_CONFIG_PATCHED=false
-DOCKER_CONFIG_BACKUP=""
+# On macOS, Docker/BuildKit credential helpers (osxkeychain, desktop) break in
+# SSH / non-interactive sessions. The helpers are called as binaries named
+# docker-credential-<store>. We create no-op shims that return empty credentials,
+# place them first in PATH, so BuildKit never touches the real keychain.
+CRED_SHIM_DIR=""
 if [[ "$(uname)" == "Darwin" ]]; then
-    ORIG_DOCKER_CONFIG="${HOME}/.docker/config.json"
-    if [[ -f "$ORIG_DOCKER_CONFIG" ]] && grep -q '"credsStore"\|"credHelpers"' "$ORIG_DOCKER_CONFIG" 2>/dev/null; then
-        DOCKER_CONFIG_BACKUP="${ORIG_DOCKER_CONFIG}.deploy-backup"
-        cp "$ORIG_DOCKER_CONFIG" "$DOCKER_CONFIG_BACKUP"
-        python3 -c "
-import json
-p = '${ORIG_DOCKER_CONFIG}'
-with open(p) as f: d = json.load(f)
-d.pop('credHelpers', None)
-d['credsStore'] = ''
-with open(p, 'w') as f: json.dump(d, f, indent=2)
-" 2>/dev/null || sed -i '' 's/"credsStore"[[:space:]]*:[[:space:]]*"[^"]*"/"credsStore": ""/g' "$ORIG_DOCKER_CONFIG"
-        DOCKER_CONFIG_PATCHED=true
-        success "Patched Docker config (stripped credential helpers, backup saved)"
-    fi
-fi
+    CRED_SHIM_DIR=$(mktemp -d)
+    for helper in osxkeychain desktop; do
+        SHIM="$CRED_SHIM_DIR/docker-credential-$helper"
+        cat > "$SHIM" <<'SHIMEOF'
+#!/bin/sh
+# No-op credential helper — returns empty credentials for anonymous pulls
+case "$1" in
+    get)  printf '{"ServerURL":"","Username":"","Secret":""}\n' ;;
+    list) printf '{}\n' ;;
+    *)    exit 0 ;;
+esac
+SHIMEOF
+        chmod +x "$SHIM"
+    done
+    export PATH="$CRED_SHIM_DIR:$PATH"
+    success "Installed credential helper shims (bypasses macOS keychain)"
 
-restore_docker_config() {
-    if [[ "$DOCKER_CONFIG_PATCHED" == true ]] && [[ -f "$DOCKER_CONFIG_BACKUP" ]]; then
-        mv "$DOCKER_CONFIG_BACKUP" "$ORIG_DOCKER_CONFIG"
-    fi
-}
-trap restore_docker_config EXIT
+    cleanup_shims() { rm -rf "$CRED_SHIM_DIR" 2>/dev/null; }
+    trap cleanup_shims EXIT
+fi
 
 # ── 2. Pull latest code ─────────────────────────────────────────────────────
 header "Pulling latest code"
