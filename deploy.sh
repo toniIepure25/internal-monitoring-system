@@ -74,20 +74,14 @@ docker compose version >/dev/null 2>&1 \
     && success "docker compose $(docker compose version --short)" \
     || fail "Docker Compose v2 is required — https://docs.docker.com/compose/install/"
 
-# On macOS, Docker Desktop stores credentials via the system keychain.
-# This breaks in SSH / non-interactive sessions even if the keychain appears unlocked.
-# Safest fix: disable the credential store entirely (only needed for private registries).
+# On macOS, Docker Desktop credential helpers break in SSH / non-interactive sessions.
+# Use a clean Docker config directory for builds to bypass all keychain issues.
 if [[ "$(uname)" == "Darwin" ]]; then
-    DOCKER_CONFIG="${HOME}/.docker/config.json"
-    if [[ -f "$DOCKER_CONFIG" ]] && grep -q '"credsStore"' "$DOCKER_CONFIG" 2>/dev/null; then
-        CURRENT_STORE=$(grep -o '"credsStore"[[:space:]]*:[[:space:]]*"[^"]*"' "$DOCKER_CONFIG" | head -1)
-        if echo "$CURRENT_STORE" | grep -qv '""'; then
-            sed -i '' 's/"credsStore"[[:space:]]*:[[:space:]]*"[^"]*"/"credsStore": ""/g' "$DOCKER_CONFIG"
-            success "Disabled Docker keychain credential store (prevents build failures)"
-        else
-            success "Docker credential store already set to default"
-        fi
-    fi
+    CLEAN_DOCKER_DIR="$SCRIPT_DIR/.docker-build-config"
+    mkdir -p "$CLEAN_DOCKER_DIR"
+    echo '{}' > "$CLEAN_DOCKER_DIR/config.json"
+    export DOCKER_CONFIG="$CLEAN_DOCKER_DIR"
+    success "Using clean Docker config (bypasses macOS keychain)"
 fi
 
 # ── 2. Pull latest code ─────────────────────────────────────────────────────

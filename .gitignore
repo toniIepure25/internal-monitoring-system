@@ -42,6 +42,7 @@ dist/
 build/
 tmp/
 temp/
+.docker-build-config/
 
 # Runtime generated files
 backend/alembic/versions/__pycache__/
