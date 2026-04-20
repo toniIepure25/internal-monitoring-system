@@ -207,7 +207,6 @@ ALL_HEALTHY=true
 
 check_health "Backend" "http://localhost:8090/docs" 20 || ALL_HEALTHY=false
 check_health "Frontend" "http://localhost:3040" 30 || ALL_HEALTHY=false
-check_health "Test App" "http://localhost:9000/health" 10 || warn "Test app not reachable (optional service)"
 
 # ── 7. Summary ───────────────────────────────────────────────────────────────
 header "Deploy complete"
@@ -227,7 +226,6 @@ printf "  %-18s %-30s %s\n"   "────────────────�
 printf "  ${BOLD}%-18s${NC} %-30s ${CYAN}%s${NC}\n" "Frontend"  "http://localhost:3040"      "https://monitoring-system.ccrolabs.com"
 printf "  ${BOLD}%-18s${NC} %-30s ${CYAN}%s${NC}\n" "Backend API"  "http://localhost:8090"   "https://monitoring-system-api.ccrolabs.com"
 printf "  ${BOLD}%-18s${NC} %-30s\n"                 "API Docs"  "http://localhost:8090/docs"
-printf "  ${BOLD}%-18s${NC} %-30s\n"                 "Test App"  "http://localhost:9000"
 printf "\n"
 printf "  ${BOLD}Demo login${NC}      admin@company.internal / admin1234\n\n"
 printf "  ${CYAN}Useful commands:${NC}\n"

@@ -62,19 +62,6 @@ services:
       - backend
     command: sh -c "rm -rf .next && npm run dev"
 
-  # Optional local demo with /control/up|down. Omit this service when testing real URLs (e.g. behind Cloudflare).
-  test-app:
-    build:
-      context: ./test-app
-      dockerfile: Dockerfile
-    ports:
-      - "9000:9000"
-    healthcheck:
-      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:9000/health')"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
-
 volumes:
   pgdata:
   redisdata:
