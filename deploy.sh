@@ -178,15 +178,30 @@ command -v curl >/dev/null 2>&1 \
     || warn "curl not found — health checks will be skipped"
 
 # On macOS, Docker Desktop credential helpers break in SSH / non-interactive sessions.
-# We prepare a clean config used ONLY for the build step (not globally, to avoid breaking
-# docker compose commands that need the daemon context).
+# Copy the real config (preserves context/socket settings) but strip credential fields.
 USE_CLEAN_DOCKER_CONFIG=false
 if [[ "$(uname)" == "Darwin" ]]; then
+    ORIG_DOCKER_CONFIG="${HOME}/.docker/config.json"
     CLEAN_DOCKER_DIR="$SCRIPT_DIR/.docker-build-config"
     mkdir -p "$CLEAN_DOCKER_DIR"
-    echo '{}' > "$CLEAN_DOCKER_DIR/config.json"
-    USE_CLEAN_DOCKER_CONFIG=true
-    success "Prepared clean Docker config (bypasses macOS keychain for builds)"
+    if [[ -f "$ORIG_DOCKER_CONFIG" ]]; then
+        # Copy the original, then blank out credsStore and remove credHelpers
+        cp "$ORIG_DOCKER_CONFIG" "$CLEAN_DOCKER_DIR/config.json"
+        sed -i '' 's/"credsStore"[[:space:]]*:[[:space:]]*"[^"]*"/"credsStore": ""/g' "$CLEAN_DOCKER_DIR/config.json"
+        # Remove credHelpers block (single or multi-line)
+        python3 -c "
+import json, sys
+p = '$CLEAN_DOCKER_DIR/config.json'
+with open(p) as f: d = json.load(f)
+d.pop('credHelpers', None)
+d['credsStore'] = ''
+with open(p, 'w') as f: json.dump(d, f, indent=2)
+" 2>/dev/null || true
+        USE_CLEAN_DOCKER_CONFIG=true
+        success "Prepared credential-free Docker config for builds"
+    else
+        info "No Docker config found at $ORIG_DOCKER_CONFIG — using defaults"
+    fi
 fi
 
 # ── 2. Pull latest code ─────────────────────────────────────────────────────
