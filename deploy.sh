@@ -3,10 +3,10 @@ set -euo pipefail
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Internal Monitoring System — Deploy Script
-# Usage:  sh deploy.sh          (first deploy or redeploy)
-#         sh deploy.sh --down   (stop and remove containers)
-#         sh deploy.sh --status (show container status)
-#         sh deploy.sh --logs   (tail live logs)
+# Usage:  ./deploy.sh          (first deploy or redeploy)
+#         ./deploy.sh --down   (stop and remove containers)
+#         ./deploy.sh --status (show container status)
+#         ./deploy.sh --logs   (tail live logs)
 # ─────────────────────────────────────────────────────────────────────────────
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -15,20 +15,70 @@ cd "$SCRIPT_DIR"
 COMPOSE_PROJECT="internal-monitoring-system"
 ENV_FILE=".env"
 ENV_EXAMPLE=".env.example"
+LOG_DIR="$SCRIPT_DIR/logs"
+mkdir -p "$LOG_DIR"
+LOG_FILE="$LOG_DIR/deploy-$(date +%Y%m%d-%H%M%S).log"
+LATEST_LOG="$LOG_DIR/deploy-latest.log"
 
 # ── Colors ───────────────────────────────────────────────────────────────────
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 CYAN='\033[0;36m'
+DIM='\033[2m'
 BOLD='\033[1m'
 NC='\033[0m'
 
-info()    { printf "${CYAN}[INFO]${NC}  %s\n" "$1"; }
-success() { printf "${GREEN}[OK]${NC}    %s\n" "$1"; }
-warn()    { printf "${YELLOW}[WARN]${NC}  %s\n" "$1"; }
-fail()    { printf "${RED}[FAIL]${NC}  %s\n" "$1"; exit 1; }
-header()  { printf "\n${BOLD}── %s ──${NC}\n\n" "$1"; }
+# ── Logging ──────────────────────────────────────────────────────────────────
+# Every log call writes to both the terminal and the log file.
+# The log file gets plain text (no ANSI colors).
+_log_raw() {
+    local stripped
+    stripped=$(printf "%s" "$1" | sed 's/\x1b\[[0-9;]*m//g' 2>/dev/null || printf "%s" "$1")
+    printf "%s  %s\n" "$(date +%H:%M:%S)" "$stripped" >> "$LOG_FILE"
+}
+
+info()    { local msg; msg=$(printf "${CYAN}[INFO]${NC}  %s" "$1"); printf "%s\n" "$msg"; _log_raw "$msg"; }
+success() { local msg; msg=$(printf "${GREEN}[OK]${NC}    %s" "$1"); printf "%s\n" "$msg"; _log_raw "$msg"; }
+warn()    { local msg; msg=$(printf "${YELLOW}[WARN]${NC}  %s" "$1"); printf "%s\n" "$msg"; _log_raw "$msg"; }
+fail()    { local msg; msg=$(printf "${RED}[FAIL]${NC}  %s" "$1"); printf "%s\n" "$msg"; _log_raw "$msg"; exit 1; }
+header()  { local msg; msg=$(printf "\n${BOLD}── %s ──${NC}" "$1"); printf "%s\n\n" "$msg"; _log_raw "$msg"; }
+
+# Capture a command's full output to the log, show last N lines on terminal
+run_logged() {
+    local label=$1; shift
+    local show_lines=${DEPLOY_SHOW_LINES:-10}
+    local tmpout
+    tmpout=$(mktemp)
+
+    printf "  ${DIM}$ %s${NC}\n" "$*"
+    _log_raw "CMD: $*"
+
+    if "$@" > "$tmpout" 2>&1; then
+        cat "$tmpout" >> "$LOG_FILE"
+        tail -n "$show_lines" "$tmpout"
+        success "$label"
+        rm -f "$tmpout"
+        return 0
+    else
+        local exit_code=$?
+        cat "$tmpout" >> "$LOG_FILE"
+        printf "\n"
+        warn "Last 25 lines of output:"
+        tail -n 25 "$tmpout"
+        printf "\n"
+        _log_raw "EXIT CODE: $exit_code"
+        rm -f "$tmpout"
+        return $exit_code
+    fi
+}
+
+# Start the log
+printf "Deploy started: %s\n" "$(date)" > "$LOG_FILE"
+printf "Working directory: %s\n" "$SCRIPT_DIR" >> "$LOG_FILE"
+printf "User: %s@%s\n" "$(whoami)" "$(hostname)" >> "$LOG_FILE"
+printf "OS: %s %s\n\n" "$(uname -s)" "$(uname -r)" >> "$LOG_FILE"
+ln -sf "$LOG_FILE" "$LATEST_LOG"
 
 # ── Handle flags ─────────────────────────────────────────────────────────────
 if [[ "${1:-}" == "--down" ]]; then
@@ -55,6 +105,7 @@ printf "  ╔══════════════════════�
 printf "  ║   Internal Monitoring System — Deploy    ║\n"
 printf "  ╚══════════════════════════════════════════╝\n"
 printf "${NC}\n"
+info "Log file: ${DIM}${LOG_FILE}${NC}"
 
 # ── 1. Prerequisites ────────────────────────────────────────────────────────
 header "Checking prerequisites"
@@ -74,6 +125,10 @@ docker compose version >/dev/null 2>&1 \
     && success "docker compose $(docker compose version --short)" \
     || fail "Docker Compose v2 is required — https://docs.docker.com/compose/install/"
 
+command -v curl >/dev/null 2>&1 \
+    && success "curl available" \
+    || warn "curl not found — health checks will be skipped"
+
 # On macOS, Docker Desktop credential helpers break in SSH / non-interactive sessions.
 # We prepare a clean config used ONLY for the build step (not globally, to avoid breaking
 # docker compose commands that need the daemon context).
@@ -91,13 +146,16 @@ header "Pulling latest code"
 
 if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
     BRANCH=$(git branch --show-current)
-    info "Branch: ${BOLD}$BRANCH${NC}"
+    info "Branch: $BRANCH"
+    info "Latest commit: $(git log -1 --format='%h %s')"
 
     if git diff --quiet && git diff --cached --quiet; then
-        git pull --ff-only origin "$BRANCH" && success "Pulled latest from origin/$BRANCH" \
+        run_logged "Pulled latest from origin/$BRANCH" git pull --ff-only origin "$BRANCH" \
             || warn "Pull failed — continuing with local code"
     else
         warn "Uncommitted changes detected — skipping git pull"
+        info "Changed files:"
+        git status --short | while read -r line; do printf "    %s\n" "$line"; done
     fi
 else
     warn "Not a git repository — skipping pull"
@@ -139,6 +197,8 @@ done
 if [[ ${#MISSING[@]} -gt 0 ]]; then
     warn "These .env variables are empty or missing: ${MISSING[*]}"
     warn "Edit .env before proceeding if needed"
+else
+    success "All required env vars are set"
 fi
 
 # ── 4. Check current state ──────────────────────────────────────────────────
@@ -161,16 +221,26 @@ fi
 header "Building and deploying"
 
 info "Building images (this may take a few minutes on first run)..."
+BUILD_START=$(date +%s)
+
 if [[ "$USE_CLEAN_DOCKER_CONFIG" == true ]]; then
-    DOCKER_CONFIG="$CLEAN_DOCKER_DIR" docker compose build --parallel 2>&1 | tail -5
+    run_logged "Docker images built" env DOCKER_CONFIG="$CLEAN_DOCKER_DIR" docker compose build --parallel \
+        || fail "Docker build failed — check the log: $LOG_FILE"
 else
-    docker compose build --parallel 2>&1 | tail -5
+    run_logged "Docker images built" docker compose build --parallel \
+        || fail "Docker build failed — check the log: $LOG_FILE"
 fi
 
-info "Starting containers..."
-docker compose up -d
+BUILD_END=$(date +%s)
+info "Build completed in $((BUILD_END - BUILD_START))s"
 
-success "Containers started"
+info "Starting containers..."
+run_logged "Containers started" docker compose up -d \
+    || fail "Failed to start containers — check the log: $LOG_FILE"
+
+# Show container status right after start
+info "Container status:"
+docker compose ps --format "table {{.Name}}\t{{.Status}}\t{{.Ports}}" 2>/dev/null || docker compose ps
 
 # ── 6. Health checks ────────────────────────────────────────────────────────
 header "Waiting for services to be healthy"
@@ -184,24 +254,34 @@ check_health() {
     while [[ $attempt -le $max_attempts ]]; do
         printf "  ${CYAN}%-12s${NC} attempt %d/%d ... " "$service" "$attempt" "$max_attempts"
 
-        if curl -sf --max-time 5 "$url" >/dev/null 2>&1; then
-            printf "${GREEN}healthy${NC}\n"
+        local http_code
+        http_code=$(curl -sf --max-time 5 -o /dev/null -w "%{http_code}" "$url" 2>/dev/null || echo "000")
+
+        if [[ "$http_code" =~ ^2 ]]; then
+            printf "${GREEN}healthy (HTTP %s)${NC}\n" "$http_code"
+            _log_raw "$service healthy (HTTP $http_code) on attempt $attempt"
             return 0
         fi
 
-        printf "${YELLOW}waiting${NC}\n"
+        printf "${YELLOW}waiting (HTTP %s)${NC}\n" "$http_code"
+        _log_raw "$service not ready (HTTP $http_code) attempt $attempt/$max_attempts"
         sleep 3
         attempt=$((attempt + 1))
     done
 
     printf "  ${CYAN}%-12s${NC} ${RED}did not become healthy after %d attempts${NC}\n" "$service" "$max_attempts"
+    _log_raw "$service FAILED health check after $max_attempts attempts"
+
+    # Dump container logs for the failing service to help debug
+    warn "Recent logs for $service:"
+    docker compose logs --tail 20 "$(echo "$service" | tr '[:upper:]' '[:lower:]')" 2>/dev/null | tail -20
     return 1
 }
 
 ALL_HEALTHY=true
 
-check_health "Backend" "http://localhost:8090/docs" 20 || ALL_HEALTHY=false
-check_health "Frontend" "http://localhost:3040" 30 || ALL_HEALTHY=false
+check_health "backend" "http://localhost:8090/docs" 20 || ALL_HEALTHY=false
+check_health "frontend" "http://localhost:3040" 30 || ALL_HEALTHY=false
 
 # ── 7. Summary ───────────────────────────────────────────────────────────────
 header "Deploy complete"
@@ -211,10 +291,15 @@ docker compose ps --format "table {{.Name}}\t{{.Status}}\t{{.Ports}}" 2>/dev/nul
 printf "\n"
 if [[ "$ALL_HEALTHY" == true ]]; then
     printf "  ${GREEN}${BOLD}All services are up and healthy${NC}\n\n"
+    _log_raw "DEPLOY SUCCESS — all services healthy"
 else
     printf "  ${YELLOW}${BOLD}Some services may still be starting — check logs with:${NC}\n"
-    printf "  ${CYAN}sh deploy.sh --logs${NC}\n\n"
+    printf "  ${CYAN}./deploy.sh --logs${NC}\n\n"
+    _log_raw "DEPLOY PARTIAL — some health checks failed"
 fi
+
+DEPLOY_END=$(date +%s)
+TOTAL_SECS=$((DEPLOY_END - BUILD_START))
 
 printf "  ${BOLD}%-18s${NC} %-30s %s\n" "Service" "Local" "Cloudflare"
 printf "  %-18s %-30s %s\n"   "──────────────────" "──────────────────────────────" "──────────────────────────────────────"
@@ -222,9 +307,11 @@ printf "  ${BOLD}%-18s${NC} %-30s ${CYAN}%s${NC}\n" "Frontend"  "http://localhos
 printf "  ${BOLD}%-18s${NC} %-30s ${CYAN}%s${NC}\n" "Backend API"  "http://localhost:8090"   "https://monitoring-system-api.ccrolabs.com"
 printf "  ${BOLD}%-18s${NC} %-30s\n"                 "API Docs"  "http://localhost:8090/docs"
 printf "\n"
-printf "  ${BOLD}Demo login${NC}      admin@company.internal / admin1234\n\n"
+printf "  ${BOLD}Demo login${NC}      admin@company.internal / admin1234\n"
+printf "  ${BOLD}Total time${NC}      ${TOTAL_SECS}s\n"
+printf "  ${BOLD}Full log${NC}        ${DIM}%s${NC}\n\n" "$LOG_FILE"
 printf "  ${CYAN}Useful commands:${NC}\n"
-printf "    sh deploy.sh --status    Container status\n"
-printf "    sh deploy.sh --logs      Tail live logs\n"
-printf "    sh deploy.sh --down      Stop everything\n"
-printf "    sh deploy.sh             Redeploy / update\n\n"
+printf "    ./deploy.sh --status    Container status\n"
+printf "    ./deploy.sh --logs      Tail live logs\n"
+printf "    ./deploy.sh --down      Stop everything\n"
+printf "    ./deploy.sh             Redeploy / update\n\n"
