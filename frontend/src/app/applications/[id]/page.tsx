@@ -181,33 +181,72 @@ export default function ApplicationDetailPage() {
             </Card></SectionItem>
           </div>
 
-          <SectionItem><Card>
-            <CardHeader><CardTitle>Health candidates</CardTitle></CardHeader>
+          <SectionItem>
             {app.health_candidates.length > 0 ? (
-              <div className="divide-y divide-border">
-                {app.health_candidates.sort((a, b) => b.score - a.score).map((c) => (
-                  <div key={c.id} className="px-4 py-2.5">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="truncate font-mono text-[11px] text-fgMuted">{c.url.replace(app.base_url, "")}</span>
-                      <span className={`text-[11px] font-semibold tabular-nums ${c.score >= 50 ? "text-success" : c.score > 0 ? "text-warning" : "text-fgSubtle"}`}>{c.score}</span>
+              <Card>
+                <CardHeader><CardTitle>Health candidates</CardTitle></CardHeader>
+                <div className="divide-y divide-border">
+                  {app.health_candidates.sort((a, b) => b.score - a.score).map((c) => (
+                    <div key={c.id} className="px-4 py-2.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="truncate font-mono text-[11px] text-fgMuted">{c.url.replace(app.base_url, "")}</span>
+                        <span className={`text-[11px] font-semibold tabular-nums ${c.score >= 50 ? "text-success" : c.score > 0 ? "text-warning" : "text-fgSubtle"}`}>{c.score}</span>
+                      </div>
+                      <div className="mt-1 flex flex-wrap items-center gap-1 text-[10px] text-fgSubtle">
+                        {c.http_status && <span>HTTP {c.http_status}</span>}
+                        {c.response_time_ms != null && <span className="tabular-nums">{c.response_time_ms}ms</span>}
+                        {c.is_json && <span className="text-accent">JSON</span>}
+                        {c.has_health_indicators && <span className="text-success">Health</span>}
+                        {c.is_selected && <span className="rounded bg-accent/10 px-1 text-accent">Selected</span>}
+                      </div>
+                      {!c.is_selected && c.score > 0 && (
+                        <button type="button" onClick={() => handleSetHealthUrl(c.url)} className="mt-1 text-[11px] font-medium text-accent hover:underline">Use this endpoint</button>
+                      )}
                     </div>
-                    <div className="mt-1 flex flex-wrap items-center gap-1 text-[10px] text-fgSubtle">
-                      {c.http_status && <span>HTTP {c.http_status}</span>}
-                      {c.response_time_ms != null && <span className="tabular-nums">{c.response_time_ms}ms</span>}
-                      {c.is_json && <span className="text-accent">JSON</span>}
-                      {c.has_health_indicators && <span className="text-success">Health</span>}
-                      {c.is_selected && <span className="rounded bg-accent/10 px-1 text-accent">Selected</span>}
-                    </div>
-                    {!c.is_selected && c.score > 0 && (
-                      <button type="button" onClick={() => handleSetHealthUrl(c.url)} className="mt-1 text-[11px] font-medium text-accent hover:underline">Use this endpoint</button>
-                    )}
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              </Card>
             ) : (
-              <CardContent className="text-center text-xs text-fgMuted">No candidates probed yet.</CardContent>
+              <Card>
+                <CardHeader><CardTitle>Configuration</CardTitle></CardHeader>
+                <CardContent>
+                  <dl className="space-y-3 text-[13px]">
+                    {[
+                      ["Timeout", `${app.timeout_seconds}s`],
+                      ["Slow threshold", `${app.slow_threshold_ms}ms`],
+                      ["Failures before DOWN", `${app.consecutive_failures_threshold} checks`],
+                      ["Successes before UP", `${app.consecutive_recovery_threshold} checks`],
+                      ["Check interval", `${app.monitoring_interval_seconds}s`],
+                      ["Consecutive failures", `${app.status?.consecutive_failures ?? 0}`],
+                      ["Consecutive successes", `${app.status?.consecutive_successes ?? 0}`],
+                    ].map(([label, value]) => (
+                      <div key={label} className="flex items-center justify-between">
+                        <dt className="text-[11px] text-fgSubtle">{label}</dt>
+                        <dd className="rounded bg-surfaceRaised px-1.5 py-0.5 text-[11px] font-medium tabular-nums text-fgMuted">{value}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                  {subscription && (
+                    <div className="mt-4 border-t border-border pt-3">
+                      <p className="mb-2 text-[11px] font-medium text-fgSubtle">Notify me on</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {[
+                          { key: "notify_on_down", label: "Down", active: subscription.notify_on_down },
+                          { key: "notify_on_up", label: "Recovery", active: subscription.notify_on_up },
+                          { key: "notify_on_degraded", label: "Degraded", active: subscription.notify_on_degraded },
+                          { key: "notify_on_slow", label: "Slow", active: subscription.notify_on_slow },
+                        ].map((n) => (
+                          <span key={n.key} className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${n.active ? "bg-accent/10 text-accent" : "bg-surfaceRaised text-fgSubtle"}`}>
+                            {n.label}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
             )}
-          </Card></SectionItem>
+          </SectionItem>
         </SectionStagger>
       </PageTransition>
     </AppShell>
