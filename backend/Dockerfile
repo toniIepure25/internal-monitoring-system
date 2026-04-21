@@ -4,8 +4,9 @@ WORKDIR /app
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends gcc libpq-dev curl && \
-    rm -rf /var/lib/apt/lists/* && \
-    mkdir -p /root/.ssh && chmod 700 /root/.ssh
+    rm -rf /var/lib/apt/lists/*
+
+RUN mkdir -p /root/.ssh && chmod 700 /root/.ssh
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
