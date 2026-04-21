@@ -1,17 +1,21 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { CubeTransparentIcon, ExclamationTriangleIcon, SparklesIcon } from "@heroicons/react/24/outline";
+import { ExclamationTriangleIcon, SparklesIcon } from "@heroicons/react/24/outline";
 import { AppShell } from "@/components/layout/app-shell";
 import { PageHeader } from "@/components/ui/page-header";
 import { StatusBadge, HostStatusBadge, SeverityBadge } from "@/components/ui/status-badge";
 import { StatCard } from "@/components/ui/stat-card";
-import { CardGridSkeleton } from "@/components/ui/loading-skeleton";
+import { CardGridSkeleton, ContentTransition } from "@/components/ui/loading-skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
-import { PageTransition, SectionStagger, SectionItem } from "@/components/ui/motion";
+import { useToast } from "@/components/ui/toast";
+import { PageTransition, SectionStagger, SectionItem, AnimatedNumber } from "@/components/ui/motion";
+import { motion } from "framer-motion";
 import { ResponseSparkline } from "@/components/ui/response-sparkline";
+import { ActivityFeed, type ActivityItem } from "@/components/ui/activity-feed";
+import { HealthRing } from "@/components/ui/health-ring";
 import { api } from "@/lib/api";
 import { formatDate, formatDuration } from "@/lib/utils";
 import type { UserGroup, Application, Incident, Host, HealthCheckEntry } from "@/types";
@@ -23,24 +27,44 @@ export default function DashboardPage() {
   const [hosts, setHosts] = useState<Host[]>([]);
   const [subscriptionCount, setSubscriptionCount] = useState(0);
   const [healthHistory, setHealthHistory] = useState<Record<string, HealthCheckEntry[]>>({});
+  const [activityItems, setActivityItems] = useState<ActivityItem[]>([]);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
+  const toast = useToast();
+  const prevStatuses = useRef<Record<string, string>>({});
 
   useEffect(() => {
     async function load() {
       try {
-        const [groupsRes, incidentsRes, appsRes, hostsRes, subsRes] = await Promise.all([
+        const [groupsRes, incidentsRes, appsRes, hostsRes, subsRes, activityRes] = await Promise.all([
           api.get<{ items: UserGroup[] }>("/api/groups"),
           api.get<{ items: Incident[] }>("/api/incidents?limit=10"),
           api.get<{ items: Application[]; total: number }>("/api/applications?limit=50"),
           api.get<{ items: Host[]; total: number }>("/api/hosts?limit=50").catch(() => ({ items: [], total: 0 })),
           api.get<{ items: unknown[]; total: number }>("/api/subscriptions").catch(() => ({ items: [], total: 0 })),
+          api.get<{ items: ActivityItem[] }>("/api/activity?limit=15").catch(() => ({ items: [] })),
         ]);
         setGroups(groupsRes.items);
         setRecentIncidents(incidentsRes.items);
         setApps(appsRes.items);
+
+        const prev = prevStatuses.current;
+        const hasPrev = Object.keys(prev).length > 0;
+        for (const a of appsRes.items) {
+          const cur = a.status?.status;
+          const old = prev[a.id];
+          if (hasPrev && cur && old && cur !== old) {
+            if (cur === "DOWN") toast.error(`${a.display_name} is DOWN (was ${old})`);
+            else if (cur === "UP" && old === "DOWN") toast.success(`${a.display_name} recovered`);
+            else if (cur === "SLOW" || cur === "DEGRADED") toast.info(`${a.display_name} is ${cur}`);
+            else toast.info(`${a.display_name}: ${old} → ${cur}`);
+          }
+          if (cur) prev[a.id] = cur;
+        }
+
         setHosts(hostsRes.items);
         setSubscriptionCount(subsRes.total || subsRes.items.length);
+        setActivityItems(activityRes.items);
 
         const visible = appsRes.items.slice(0, 8);
         const historyResults = await Promise.all(
@@ -61,6 +85,8 @@ export default function DashboardPage() {
 
   const appsUp = apps.filter((a) => a.status?.status === "UP").length;
   const appsDown = apps.filter((a) => a.status?.status === "DOWN").length;
+  const appsDegraded = apps.filter((a) => a.status?.status === "DEGRADED" || a.status?.status === "SLOW").length;
+  const appsUnknown = apps.length - appsUp - appsDown - appsDegraded;
   const activeIncidents = recentIncidents.filter((i) => i.status === "ONGOING").length;
 
   return (
@@ -68,13 +94,24 @@ export default function DashboardPage() {
       <PageTransition>
         <PageHeader eyebrow="Overview" title="Dashboard" description="Health, incidents, and operational status at a glance." />
 
-        {loading ? (
-          <div className="mt-5"><CardGridSkeleton /></div>
-        ) : (
+        <ContentTransition loading={loading} skeleton={<div className="mt-5"><CardGridSkeleton /></div>}>
           <SectionStagger className="mt-5 space-y-6">
             {/* Metrics */}
             <SectionItem className="grid grid-cols-3 gap-3">
-              <StatCard icon={CubeTransparentIcon} label="Applications" value={apps.length} subtext={`${appsUp} up · ${appsDown} down`} color={appsDown > 0 ? "red" : "green"} delay={0} />
+              <motion.div
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                whileHover={{ y: -1, transition: { duration: 0.15 } }}
+                transition={{ duration: 0.25, ease: [0.25, 0.1, 0.25, 1] }}
+                className="flex items-center gap-4 rounded-lg border border-border/60 bg-surface px-4 py-3 transition-shadow hover:shadow-md hover:shadow-canvas/50"
+              >
+                <HealthRing up={appsUp} down={appsDown} degraded={appsDegraded} unknown={appsUnknown} size={56} strokeWidth={5} />
+                <div>
+                  <p className="text-[11px] font-medium uppercase tracking-wider text-fgSubtle">System health</p>
+                  <p className="mt-0.5 text-lg font-semibold tabular-nums text-fg"><AnimatedNumber value={apps.length} /></p>
+                  <p className="text-[11px] text-success/70">{appsUp} up · {appsDown} down</p>
+                </div>
+              </motion.div>
               <StatCard icon={ExclamationTriangleIcon} label="Active incidents" value={activeIncidents} subtext={activeIncidents > 0 ? "Requires attention" : "All clear"} color={activeIncidents > 0 ? "red" : "green"} delay={0.04} />
               <StatCard icon={SparklesIcon} label="Subscriptions" value={subscriptionCount} subtext="Notification-enabled" color="gray" delay={0.08} />
             </SectionItem>
@@ -92,7 +129,7 @@ export default function DashboardPage() {
                   {recentIncidents.length > 0 ? (
                     <div className="divide-y divide-border">
                       {recentIncidents.slice(0, 6).map((inc) => (
-                        <div key={inc.id} className="flex items-center justify-between gap-3 px-4 py-2.5">
+                        <Link key={inc.id} href={`/incidents/${inc.id}`} className="flex items-center justify-between gap-3 px-4 py-2.5 transition-colors hover:bg-surfaceRaised/40">
                           <div className="min-w-0">
                             <p className="truncate text-[13px] font-medium text-fg">{inc.title}</p>
                             <p className="text-[11px] text-fgSubtle">{formatDate(inc.started_at)}</p>
@@ -101,13 +138,25 @@ export default function DashboardPage() {
                             <SeverityBadge severity={inc.severity} />
                             <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${inc.status === "ONGOING" ? "bg-danger/10 text-danger" : "bg-success/10 text-success"}`}>{inc.status}</span>
                           </div>
-                        </div>
+                        </Link>
                       ))}
                     </div>
                   ) : (
                     <EmptyState title="No incidents" description="Incidents appear here when state changes are detected." className="py-8" />
                   )}
                 </section>
+
+                {/* Activity feed */}
+                {activityItems.length > 0 && (
+                  <section className="rounded-lg border border-border bg-surface">
+                    <div className="flex items-center justify-between border-b border-border px-4 py-2.5">
+                      <h2 className="text-[13px] font-medium text-fg">Activity</h2>
+                    </div>
+                    <div className="px-3 py-1">
+                      <ActivityFeed items={activityItems.slice(0, 8)} />
+                    </div>
+                  </section>
+                )}
 
                 {/* Applications */}
                 <section className="rounded-lg border border-border bg-surface">
@@ -192,7 +241,7 @@ export default function DashboardPage() {
               </div>
             </SectionItem>
           </SectionStagger>
-        )}
+        </ContentTransition>
       </PageTransition>
     </AppShell>
   );

@@ -1,10 +1,11 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
+import Link from "next/link";
 import { AppShell } from "@/components/layout/app-shell";
 import { PageHeader } from "@/components/ui/page-header";
 import { SeverityBadge, IncidentTypeBadge } from "@/components/ui/status-badge";
-import { TableSkeleton } from "@/components/ui/loading-skeleton";
+import { TableSkeleton, ContentTransition } from "@/components/ui/loading-skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
 import { DataTableShell, SortableTh, Td, type SortState, toggleSort } from "@/components/ui/data-table-shell";
 import { Pagination } from "@/components/ui/pagination";
@@ -82,7 +83,7 @@ export default function IncidentsPage() {
                 {paginated.map((inc) => (
                   <tr key={inc.id} className="transition-colors hover:bg-surfaceRaised/40">
                     <Td className="max-w-[240px]">
-                      <p className="truncate font-medium text-fg">{inc.title}</p>
+                      <Link href={`/incidents/${inc.id}`} className="truncate font-medium text-fg hover:text-accent">{inc.title}</Link>
                       {inc.application_name && <p className="truncate text-[11px] text-fgSubtle">{inc.application_name}</p>}
                     </Td>
                     <Td><IncidentTypeBadge type={inc.incident_type} /></Td>

@@ -64,7 +64,9 @@ export function Sidebar({ collapsed = false, onToggleCollapse, onNavigate, class
           "relative z-10 transition-colors duration-150",
           !active && "group-hover:bg-surfaceRaised/60",
         )} />
-        <Icon className={cn("relative z-10 h-4 w-4 shrink-0 transition-colors", active ? "text-accent" : "text-fgSubtle group-hover:text-fgMuted")} />
+        <motion.span whileHover={{ scale: 1.15 }} transition={{ duration: 0.15 }} className="relative z-10 inline-flex">
+          <Icon className={cn("h-4 w-4 shrink-0 transition-colors", active ? "text-accent" : "text-fgSubtle group-hover:text-fgMuted")} />
+        </motion.span>
         <span className={cn("relative z-10 truncate", collapsed && "lg:sr-only")}>{item.label}</span>
       </Link>
     );

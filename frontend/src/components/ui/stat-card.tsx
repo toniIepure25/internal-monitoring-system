@@ -41,8 +41,9 @@ export function StatCard({ icon: Icon, label, value, subtext, color = "blue", de
     <motion.div
       initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
+      whileHover={{ y: -1, transition: { duration: 0.15 } }}
       transition={{ duration: 0.25, delay, ease: [0.25, 0.1, 0.25, 1] as [number, number, number, number] }}
-      className="rounded-lg border border-border/60 bg-surface px-4 py-3"
+      className="rounded-lg border border-border/60 bg-surface px-4 py-3 transition-shadow hover:shadow-md hover:shadow-canvas/50"
     >
       <div className="flex items-center gap-2">
         <span className={cn("h-1.5 w-1.5 rounded-full", dotColors[color])} />

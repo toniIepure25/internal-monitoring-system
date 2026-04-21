@@ -51,6 +51,7 @@ from app.api.notifications import router as notifications_router
 from app.api.admin import router as admin_router
 from app.api.hosts import router as hosts_router
 from app.api.public import router as public_router
+from app.api.activity import router as activity_router
 
 app.include_router(auth_router, prefix="/api/auth", tags=["auth"])
 app.include_router(applications_router, prefix="/api/applications", tags=["applications"])
@@ -61,6 +62,7 @@ app.include_router(incidents_router, prefix="/api/incidents", tags=["incidents"]
 app.include_router(notifications_router, prefix="/api/notifications", tags=["notifications"])
 app.include_router(admin_router, prefix="/api/admin", tags=["admin"])
 app.include_router(public_router, prefix="/api/public", tags=["public"])
+app.include_router(activity_router, prefix="/api/activity", tags=["activity"])
 
 
 @app.get("/api/health")

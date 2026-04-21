@@ -2,13 +2,14 @@
 
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
+import Link from "next/link";
 import { ArrowLeftIcon } from "@heroicons/react/24/outline";
 import { AppShell } from "@/components/layout/app-shell";
 import { StatusBadge, SeverityBadge } from "@/components/ui/status-badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { PageTransition, SectionStagger, SectionItem } from "@/components/ui/motion";
-import { ResponseSparkline } from "@/components/ui/response-sparkline";
+import { ResponseChart } from "@/components/ui/response-chart";
 import { UptimeBar } from "@/components/ui/uptime-bar";
 import { useToast } from "@/components/ui/toast";
 import { api } from "@/lib/api";
@@ -36,7 +37,7 @@ export default function ApplicationDetailPage() {
           api.get<AppDetail>(`/api/applications/${params.id}`),
           api.get<{ items: Incident[] }>(`/api/incidents?application_id=${params.id}&limit=20`),
           api.get<{ items: Subscription[]; total: number }>(`/api/subscriptions?limit=200`),
-          api.get<{ items: HealthCheckEntry[] }>(`/api/applications/${params.id}/health-history?limit=50`).catch(() => ({ items: [] })),
+          api.get<{ items: HealthCheckEntry[] }>(`/api/applications/${params.id}/health-history?limit=100`).catch(() => ({ items: [] })),
         ]);
         setApp(appRes); setIncidents(incRes.items);
         setSubscription(subsRes.items.find((s) => s.application_id === params.id) || null);
@@ -141,7 +142,12 @@ export default function ApplicationDetailPage() {
                   <div className="mt-4 space-y-3 border-t border-border pt-4">
                     <div>
                       <p className="text-[11px] text-fgSubtle">Response time trend</p>
-                      <ResponseSparkline checks={healthHistory} width={320} height={40} className="mt-1" />
+                      <ResponseChart
+                        checks={healthHistory}
+                        slowThreshold={app.slow_threshold_ms}
+                        height={160}
+                        className="mt-1"
+                      />
                     </div>
                     <div>
                       <p className="mb-1 text-[11px] text-fgSubtle">Uptime</p>
@@ -157,7 +163,7 @@ export default function ApplicationDetailPage() {
               {incidents.length > 0 ? (
                 <div className="divide-y divide-border">
                   {incidents.map((inc) => (
-                    <div key={inc.id} className="flex items-center justify-between gap-3 px-4 py-2.5">
+                    <Link key={inc.id} href={`/incidents/${inc.id}`} className="flex items-center justify-between gap-3 px-4 py-2.5 transition-colors hover:bg-surfaceRaised/40">
                       <div className="min-w-0">
                         <p className="truncate text-[13px] font-medium text-fg">{inc.title}</p>
                         <p className="text-[11px] text-fgSubtle">{formatDate(inc.started_at)}</p>
@@ -166,7 +172,7 @@ export default function ApplicationDetailPage() {
                         <SeverityBadge severity={inc.severity} />
                         <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${inc.status === "ONGOING" ? "bg-danger/10 text-danger" : "bg-success/10 text-success"}`}>{inc.status}</span>
                       </div>
-                    </div>
+                    </Link>
                   ))}
                 </div>
               ) : (
