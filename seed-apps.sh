@@ -5,7 +5,9 @@ set -euo pipefail
 # Seed Applications — registers apps and auto-discovers health endpoints
 #
 # Usage:
-#   ./seed-apps.sh                  # seed all apps below
+#   ./seed-apps.sh                  # seed all apps below (skips existing)
+#   ./seed-apps.sh --reseed         # delete all seeded apps & re-register
+#   ./seed-apps.sh --rediscover     # keep apps but re-run discovery on all
 #   ./seed-apps.sh --dry-run        # just print what would be registered
 #   ./seed-apps.sh --check          # check which apps are already registered
 #
@@ -68,8 +70,12 @@ NC='\033[0m'
 # ── Handle flags ──────────────────────────────────────────────────────────────
 DRY_RUN=false
 CHECK_ONLY=false
+RESEED=false
+REDISCOVER=false
 if [[ "${1:-}" == "--dry-run" ]]; then DRY_RUN=true; fi
 if [[ "${1:-}" == "--check" ]]; then CHECK_ONLY=true; fi
+if [[ "${1:-}" == "--reseed" ]]; then RESEED=true; fi
+if [[ "${1:-}" == "--rediscover" ]]; then REDISCOVER=true; fi
 
 printf "\n${BOLD}${CYAN}  ╔═══════════════════════════════════════╗${NC}\n"
 printf "${BOLD}${CYAN}  ║   Seed Applications                   ║${NC}\n"
@@ -145,6 +151,132 @@ for app in data.get('items', []):
         fi
     done
     printf "\n"
+    exit 0
+fi
+
+# ── 2b. --reseed: delete existing seeded apps ────────────────────────────────
+if $RESEED; then
+    printf "${YELLOW}[RESEED]${NC} Deleting existing seeded apps so they can be re-registered...\n\n"
+
+    EXISTING_JSON=$(echo "$EXISTING" | python3 -c "
+import sys, json
+data = json.load(sys.stdin)
+for app in data.get('items', []):
+    print(json.dumps({'id': app['id'], 'base_url': app.get('base_url','').rstrip('/').lower(), 'name': app['display_name']}))
+" 2>/dev/null)
+
+    DELETED=0
+    for entry in "${APPS[@]}"; do
+        IFS='|' read -r name url <<< "$entry"
+        url_lower=$(echo "$url" | tr '[:upper:]' '[:lower:]' | sed 's:/*$::')
+
+        APP_ID=$(echo "$EXISTING_JSON" | python3 -c "
+import sys, json
+target = '$url_lower'
+for line in sys.stdin:
+    line = line.strip()
+    if not line: continue
+    app = json.loads(line)
+    if app['base_url'] == target:
+        print(app['id'])
+        break
+" 2>/dev/null)
+
+        if [[ -n "$APP_ID" ]]; then
+            DEL_RESP=$(curl -sf --max-time 10 \
+                -X DELETE "$API_URL/api/applications/$APP_ID" \
+                -H "$AUTH" 2>&1) && {
+                printf "  ${RED}✗ %-30s${NC} deleted (id: ${DIM}%s${NC})\n" "$name" "$APP_ID"
+                DELETED=$((DELETED + 1))
+            } || {
+                printf "  ${YELLOW}⚠ %-30s${NC} delete failed\n" "$name"
+            }
+        fi
+    done
+
+    printf "\n  Deleted ${BOLD}%d${NC} apps. Re-registering...\n\n" "$DELETED"
+    EXISTING_URLS=""
+fi
+
+# ── 2c. --rediscover: re-run discovery on existing apps ─────────────────────
+if $REDISCOVER; then
+    printf "${CYAN}[REDISCOVER]${NC} Triggering fresh discovery on all existing seeded apps...\n\n"
+
+    EXISTING_JSON=$(echo "$EXISTING" | python3 -c "
+import sys, json
+data = json.load(sys.stdin)
+for app in data.get('items', []):
+    print(json.dumps({'id': app['id'], 'base_url': app.get('base_url','').rstrip('/').lower(), 'name': app['display_name']}))
+" 2>/dev/null)
+
+    REDISCOVERED_IDS=()
+    for entry in "${APPS[@]}"; do
+        IFS='|' read -r name url <<< "$entry"
+        url_lower=$(echo "$url" | tr '[:upper:]' '[:lower:]' | sed 's:/*$::')
+
+        APP_ID=$(echo "$EXISTING_JSON" | python3 -c "
+import sys, json
+target = '$url_lower'
+for line in sys.stdin:
+    line = line.strip()
+    if not line: continue
+    app = json.loads(line)
+    if app['base_url'] == target:
+        print(app['id'])
+        break
+" 2>/dev/null)
+
+        if [[ -n "$APP_ID" ]]; then
+            DISC_RESP=$(curl -sf --max-time 15 \
+                -X POST "$API_URL/api/applications/$APP_ID/rediscover" \
+                -H "$AUTH" 2>&1) && {
+                printf "  ${GREEN}↻ %-30s${NC} discovery queued\n" "$name"
+                REDISCOVERED_IDS+=("$APP_ID|$name")
+            } || {
+                printf "  ${YELLOW}⚠ %-30s${NC} rediscover failed\n" "$name"
+            }
+        else
+            printf "  ${DIM}⊘ %-30s not registered yet${NC}\n" "$name"
+        fi
+    done
+
+    if [[ ${#REDISCOVERED_IDS[@]} -gt 0 ]]; then
+        printf "\n  ${DIM}Waiting 15 seconds for discovery to complete...${NC}\n\n"
+        sleep 15
+
+        for entry in "${REDISCOVERED_IDS[@]}"; do
+            IFS='|' read -r app_id app_name <<< "$entry"
+
+            APP_DATA=$(curl -sf --max-time 10 \
+                -H "$AUTH" \
+                "$API_URL/api/applications/$app_id" 2>/dev/null) || continue
+
+            HEALTH_URL=$(echo "$APP_DATA" | python3 -c "import sys,json; print(json.load(sys.stdin).get('health_url') or 'none')" 2>/dev/null)
+            CANDIDATES=$(echo "$APP_DATA" | python3 -c "
+import sys, json
+data = json.load(sys.stdin)
+candidates = data.get('health_candidates', [])
+valid = [c for c in candidates if c.get('score', 0) > 0]
+print(f'{len(valid)} endpoints found')
+for c in sorted(valid, key=lambda x: x.get('score',0), reverse=True)[:5]:
+    path = c['url'].split('/', 3)[-1] if '/' in c['url'][8:] else '/'
+    sel = ' ← active' if c.get('is_selected') else ''
+    print(f\"    {c.get('score',0):>3}  /{path}  {c.get('http_status','')} {c.get('response_time_ms','')}ms{sel}\")
+" 2>/dev/null)
+
+            if [[ "$HEALTH_URL" != "none" ]]; then
+                printf "  ${GREEN}✓ %-30s${NC} health: %s\n" "$app_name" "$HEALTH_URL"
+            else
+                printf "  ${YELLOW}⚠ %-30s${NC} no health endpoint found\n" "$app_name"
+            fi
+            echo "$CANDIDATES" | while read -r line; do
+                [[ -n "$line" ]] && printf "    ${DIM}%s${NC}\n" "$line"
+            done
+        done
+    fi
+
+    printf "\n${BOLD}── Summary ──${NC}\n\n"
+    printf "  Rediscovered: ${GREEN}%d${NC} apps\n\n" "${#REDISCOVERED_IDS[@]}"
     exit 0
 fi
 
