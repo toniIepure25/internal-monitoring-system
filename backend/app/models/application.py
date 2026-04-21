@@ -42,6 +42,9 @@ class Application(Base):
     consecutive_recovery_threshold: Mapped[int] = mapped_column(Integer, default=2, nullable=False)
     slow_threshold_ms: Mapped[int] = mapped_column(Integer, default=2000, nullable=False)
 
+    frontend_container: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    backend_container: Mapped[str | None] = mapped_column(String(200), nullable=True)
+
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

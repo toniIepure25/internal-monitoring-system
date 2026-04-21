@@ -29,6 +29,9 @@ class Settings(BaseSettings):
     # Logging
     LOG_LEVEL: str = "INFO"
 
+    # VM / Container access
+    VM_EXEC_PREFIX: str = "multipass exec ubuntu-vm --"
+
     # Monitoring
     MONITORING_ENABLED: bool = True
     DEFAULT_CHECK_INTERVAL_SECONDS: int = 60

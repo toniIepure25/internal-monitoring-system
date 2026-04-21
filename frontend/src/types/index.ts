@@ -33,10 +33,37 @@ export interface Application {
   consecutive_failures_threshold: number;
   consecutive_recovery_threshold: number;
   slow_threshold_ms: number;
+  frontend_container: string | null;
+  backend_container: string | null;
   created_at: string;
   updated_at: string;
   status?: ApplicationStatusInfo;
   creator?: User;
+}
+
+export interface ContainerInfo {
+  name: string;
+  image: string;
+  status: string;
+  ports: string;
+}
+
+export interface ContainerDiscovery {
+  frontend: string | null;
+  backend: string | null;
+  current_frontend: string | null;
+  current_backend: string | null;
+  all_matches: ContainerInfo[];
+  all_containers: ContainerInfo[];
+}
+
+export interface ContainerLogs {
+  container_name: string;
+  container_type: string;
+  lines: string;
+  line_count: number;
+  success: boolean;
+  error: string | null;
 }
 
 export interface ApplicationStatusInfo {

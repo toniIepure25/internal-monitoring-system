@@ -66,6 +66,8 @@ class ApplicationResponse(BaseModel):
     consecutive_failures_threshold: int
     consecutive_recovery_threshold: int
     slow_threshold_ms: int
+    frontend_container: Optional[str] = None
+    backend_container: Optional[str] = None
     created_at: str
     updated_at: str
     status: Optional[ApplicationStatusResponse] = None
@@ -80,3 +82,35 @@ class ApplicationDetailResponse(ApplicationResponse):
 class ApplicationListResponse(BaseModel):
     items: List[ApplicationResponse]
     total: int
+
+
+# ── Container-related schemas ─────────────────────────────────────────────────
+
+class ContainerInfoResponse(BaseModel):
+    name: str
+    image: str
+    status: str
+    ports: str
+
+
+class ContainerDiscoveryResponse(BaseModel):
+    frontend: Optional[str] = None
+    backend: Optional[str] = None
+    current_frontend: Optional[str] = None
+    current_backend: Optional[str] = None
+    all_matches: List[ContainerInfoResponse] = []
+    all_containers: List[ContainerInfoResponse] = []
+
+
+class UpdateContainerMappingRequest(BaseModel):
+    frontend_container: Optional[str] = Field(None, max_length=200)
+    backend_container: Optional[str] = Field(None, max_length=200)
+
+
+class ContainerLogResponse(BaseModel):
+    container_name: str
+    container_type: str
+    lines: str
+    line_count: int
+    success: bool
+    error: Optional[str] = None

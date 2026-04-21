@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeftIcon } from "@heroicons/react/24/outline";
+import { ArrowLeftIcon, ArrowPathIcon, CommandLineIcon } from "@heroicons/react/24/outline";
 import { AppShell } from "@/components/layout/app-shell";
 import { StatusBadge, SeverityBadge } from "@/components/ui/status-badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,7 +14,7 @@ import { UptimeBar } from "@/components/ui/uptime-bar";
 import { useToast } from "@/components/ui/toast";
 import { api } from "@/lib/api";
 import { formatDate, formatDuration } from "@/lib/utils";
-import type { Application, HealthCandidate, Incident, Subscription, HealthCheckEntry } from "@/types";
+import type { Application, HealthCandidate, Incident, Subscription, HealthCheckEntry, ContainerDiscovery, ContainerLogs, ContainerInfo } from "@/types";
 
 interface AppDetail extends Application { health_candidates: HealthCandidate[]; }
 
@@ -32,6 +32,19 @@ export default function ApplicationDetailPage() {
   const [editingConfig, setEditingConfig] = useState(false);
   const [configDraft, setConfigDraft] = useState({ timeout_seconds: 0, slow_threshold_ms: 0, consecutive_failures_threshold: 0, consecutive_recovery_threshold: 0, monitoring_interval_seconds: 0 });
   const [savingConfig, setSavingConfig] = useState(false);
+
+  // Container logs state
+  const [logTab, setLogTab] = useState<"backend" | "frontend">("backend");
+  const [logTail, setLogTail] = useState(200);
+  const [logs, setLogs] = useState<ContainerLogs | null>(null);
+  const [logsLoading, setLogsLoading] = useState(false);
+  const [containerDiscovery, setContainerDiscovery] = useState<ContainerDiscovery | null>(null);
+  const [discovering, setDiscovering] = useState(false);
+  const [editingContainer, setEditingContainer] = useState(false);
+  const [containerDraft, setContainerDraft] = useState({ frontend_container: "", backend_container: "" });
+  const [savingContainer, setSavingContainer] = useState(false);
+  const [showAllContainers, setShowAllContainers] = useState(false);
+  const logEndRef = useRef<HTMLDivElement>(null);
 
   const reload = async () => {
     try {
@@ -132,6 +145,66 @@ export default function ApplicationDetailPage() {
     try {
       await api.patch<AppDetail>(`/api/applications/${app.id}/health-url`, { health_url: url });
       toast.success("Health URL updated");
+      await reload();
+    } catch (err: unknown) { toast.error(err instanceof Error ? err.message : "Failed"); }
+  };
+
+  const fetchLogs = useCallback(async (type?: "backend" | "frontend", tail?: number) => {
+    if (!app) return;
+    const t = type ?? logTab;
+    const containerName = t === "frontend" ? app.frontend_container : app.backend_container;
+    if (!containerName) { setLogs(null); return; }
+    setLogsLoading(true);
+    try {
+      const res = await api.get<ContainerLogs>(`/api/applications/${app.id}/logs/${t}?tail=${tail ?? logTail}`);
+      setLogs(res);
+      setTimeout(() => logEndRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
+    } catch { setLogs(null); }
+    setLogsLoading(false);
+  }, [app, logTab, logTail]);
+
+  const handleDiscoverContainers = async () => {
+    if (!app) return;
+    setDiscovering(true);
+    try {
+      const res = await api.get<ContainerDiscovery>(`/api/applications/${app.id}/containers`);
+      setContainerDiscovery(res);
+
+      if ((res.frontend || res.backend) && !app.frontend_container && !app.backend_container) {
+        await api.patch(`/api/applications/${app.id}/containers`, {
+          frontend_container: res.frontend || undefined,
+          backend_container: res.backend || undefined,
+        });
+        await reload();
+        toast.success("Containers linked");
+      }
+    } catch (err: unknown) { toast.error(err instanceof Error ? err.message : "Discovery failed"); }
+    setDiscovering(false);
+  };
+
+  const handleSaveContainers = async () => {
+    if (!app) return;
+    setSavingContainer(true);
+    try {
+      await api.patch(`/api/applications/${app.id}/containers`, {
+        frontend_container: containerDraft.frontend_container || null,
+        backend_container: containerDraft.backend_container || null,
+      });
+      toast.success("Containers updated");
+      setEditingContainer(false);
+      await reload();
+    } catch (err: unknown) { toast.error(err instanceof Error ? err.message : "Failed to save"); }
+    setSavingContainer(false);
+  };
+
+  const handlePickContainer = async (name: string, role: "frontend" | "backend") => {
+    if (!app) return;
+    try {
+      await api.patch(`/api/applications/${app.id}/containers`, {
+        [`${role}_container`]: name,
+      });
+      toast.success(`${role} container set to ${name}`);
+      setShowAllContainers(false);
       await reload();
     } catch (err: unknown) { toast.error(err instanceof Error ? err.message : "Failed"); }
   };
@@ -238,6 +311,161 @@ export default function ApplicationDetailPage() {
               ) : (
                 <CardContent className="text-center text-xs text-fgMuted">No incidents recorded</CardContent>
               )}
+            </Card></SectionItem>
+
+            {/* Container Logs */}
+            <SectionItem><Card>
+              <CardHeader>
+                <div className="flex items-center gap-2">
+                  <CommandLineIcon className="h-4 w-4 text-fgSubtle" />
+                  <CardTitle>Container logs</CardTitle>
+                </div>
+                <div className="flex items-center gap-2">
+                  {(app.frontend_container || app.backend_container) && (
+                    <button type="button" onClick={() => {
+                      setContainerDraft({ frontend_container: app.frontend_container || "", backend_container: app.backend_container || "" });
+                      setEditingContainer(!editingContainer);
+                    }} className="text-[11px] font-medium text-accent hover:underline">
+                      {editingContainer ? "Cancel" : "Edit"}
+                    </button>
+                  )}
+                </div>
+              </CardHeader>
+              <CardContent>
+                {!app.frontend_container && !app.backend_container && !editingContainer ? (
+                  <div className="space-y-3 text-center">
+                    <p className="text-[12px] text-fgMuted">No containers linked to this application.</p>
+                    <div className="flex justify-center gap-2">
+                      <Button variant="secondary" size="xs" onClick={handleDiscoverContainers} disabled={discovering}>
+                        {discovering ? "Searching…" : "Auto-discover"}
+                      </Button>
+                      <Button variant="secondary" size="xs" onClick={() => {
+                        setContainerDraft({ frontend_container: "", backend_container: "" });
+                        setEditingContainer(true);
+                      }}>Set manually</Button>
+                    </div>
+
+                    {containerDiscovery && !containerDiscovery.frontend && !containerDiscovery.backend && (
+                      <div className="mt-3 rounded-md bg-surfaceRaised px-3 py-2 text-left">
+                        <p className="text-[11px] font-medium text-fgMuted">No matching containers found.</p>
+                        {containerDiscovery.all_containers.length > 0 && (
+                          <div className="mt-2">
+                            <button type="button" onClick={() => setShowAllContainers(!showAllContainers)} className="text-[11px] font-medium text-accent hover:underline">
+                              {showAllContainers ? "Hide" : "Show"} all {containerDiscovery.all_containers.length} containers
+                            </button>
+                            {showAllContainers && (
+                              <div className="mt-2 max-h-48 space-y-1 overflow-y-auto">
+                                {containerDiscovery.all_containers.map((c) => (
+                                  <div key={c.name} className="flex items-center justify-between rounded px-2 py-1.5 text-[11px] hover:bg-surface">
+                                    <div className="min-w-0">
+                                      <p className="truncate font-mono font-medium text-fg">{c.name}</p>
+                                      <p className="truncate text-fgSubtle">{c.image}</p>
+                                    </div>
+                                    <div className="flex shrink-0 gap-1">
+                                      <button type="button" onClick={() => handlePickContainer(c.name, "backend")} className="rounded bg-accent/10 px-1.5 py-0.5 text-[10px] font-medium text-accent hover:bg-accent/20">BE</button>
+                                      <button type="button" onClick={() => handlePickContainer(c.name, "frontend")} className="rounded bg-accent/10 px-1.5 py-0.5 text-[10px] font-medium text-accent hover:bg-accent/20">FE</button>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ) : editingContainer ? (
+                  <div className="space-y-3">
+                    <div>
+                      <label className="text-[11px] text-fgSubtle">Backend container</label>
+                      <input type="text" value={containerDraft.backend_container} onChange={(e) => setContainerDraft((d) => ({ ...d, backend_container: e.target.value }))} placeholder="e.g. myapp-backend-1" className="mt-0.5 w-full rounded border border-border bg-canvas px-2 py-1.5 font-mono text-[11px] text-fg outline-none focus:border-accent" />
+                    </div>
+                    <div>
+                      <label className="text-[11px] text-fgSubtle">Frontend container</label>
+                      <input type="text" value={containerDraft.frontend_container} onChange={(e) => setContainerDraft((d) => ({ ...d, frontend_container: e.target.value }))} placeholder="e.g. myapp-frontend-1" className="mt-0.5 w-full rounded border border-border bg-canvas px-2 py-1.5 font-mono text-[11px] text-fg outline-none focus:border-accent" />
+                    </div>
+                    <div className="flex items-center justify-between border-t border-border pt-3">
+                      <Button variant="secondary" size="xs" onClick={handleDiscoverContainers} disabled={discovering}>
+                        {discovering ? "…" : "Auto-discover"}
+                      </Button>
+                      <div className="flex gap-2">
+                        <Button variant="secondary" size="xs" onClick={() => setEditingContainer(false)}>Cancel</Button>
+                        <Button size="xs" onClick={handleSaveContainers} disabled={savingContainer}>{savingContainer ? "Saving…" : "Save"}</Button>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {/* Tab bar */}
+                    <div className="flex items-center justify-between">
+                      <div className="flex gap-1 rounded-md bg-surfaceRaised p-0.5">
+                        {(["backend", "frontend"] as const).map((tab) => {
+                          const name = tab === "frontend" ? app.frontend_container : app.backend_container;
+                          return (
+                            <button
+                              key={tab}
+                              type="button"
+                              onClick={() => { setLogTab(tab); setLogs(null); }}
+                              className={`rounded px-3 py-1 text-[11px] font-medium transition-colors ${logTab === tab ? "bg-surface text-fg shadow-sm" : "text-fgMuted hover:text-fg"} ${!name ? "opacity-40" : ""}`}
+                              disabled={!name}
+                            >
+                              {tab === "backend" ? "Backend" : "Frontend"}
+                              {!name && <span className="ml-1 text-[10px]">(none)</span>}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <select value={logTail} onChange={(e) => setLogTail(Number(e.target.value))} className="rounded border border-border bg-canvas px-1.5 py-0.5 text-[11px] text-fgMuted outline-none">
+                          {[50, 200, 500, 1000].map((n) => <option key={n} value={n}>{n} lines</option>)}
+                        </select>
+                        <button type="button" onClick={() => fetchLogs()} disabled={logsLoading} className="rounded p-1 text-fgMuted transition-colors hover:bg-surfaceRaised hover:text-fg" title="Refresh">
+                          <ArrowPathIcon className={`h-3.5 w-3.5 ${logsLoading ? "animate-spin" : ""}`} />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Container info */}
+                    <div className="flex items-center gap-2 text-[11px]">
+                      <span className="text-fgSubtle">Container:</span>
+                      <code className="rounded bg-surfaceRaised px-1.5 py-0.5 font-mono text-fg">
+                        {logTab === "frontend" ? app.frontend_container : app.backend_container}
+                      </code>
+                    </div>
+
+                    {/* Log output */}
+                    {!logs && !logsLoading ? (
+                      <div className="rounded-md bg-[#0d1117] px-3 py-6 text-center">
+                        <p className="text-[11px] text-[#8b949e]">Click refresh to load logs</p>
+                        <button type="button" onClick={() => fetchLogs()} className="mt-2 rounded bg-accent/10 px-3 py-1 text-[11px] font-medium text-accent hover:bg-accent/20">
+                          Load logs
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="relative max-h-[400px] overflow-y-auto rounded-md bg-[#0d1117] p-3">
+                        {logsLoading && !logs && (
+                          <div className="flex items-center gap-2 py-4 text-center text-[11px] text-[#8b949e]">
+                            <ArrowPathIcon className="h-3.5 w-3.5 animate-spin" /> Loading logs…
+                          </div>
+                        )}
+                        {logs && (
+                          <>
+                            {logs.success ? (
+                              <pre className="whitespace-pre-wrap break-all font-mono text-[11px] leading-5 text-[#c9d1d9]">
+                                {logs.lines || "(empty)"}
+                              </pre>
+                            ) : (
+                              <p className="text-[11px] text-red-400">{logs.error || "Failed to fetch logs"}</p>
+                            )}
+                            {logs.success && <p className="mt-2 border-t border-[#21262d] pt-2 text-[10px] text-[#484f58]">{logs.line_count} lines · {logs.container_name}</p>}
+                          </>
+                        )}
+                        <div ref={logEndRef} />
+                      </div>
+                    )}
+                  </div>
+                )}
+              </CardContent>
             </Card></SectionItem>
           </div>
 

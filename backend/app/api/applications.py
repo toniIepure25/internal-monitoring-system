@@ -6,10 +6,12 @@ from fastapi import APIRouter, HTTPException, Query, BackgroundTasks, status
 from app.api.deps import DbSession, CurrentUser
 from app.schemas.application import (
     CreateApplicationRequest, UpdateApplicationRequest, SetHealthUrlRequest,
+    UpdateContainerMappingRequest,
     ApplicationResponse, ApplicationDetailResponse, ApplicationListResponse,
     ApplicationStatusResponse, HealthCandidateResponse,
+    ContainerDiscoveryResponse, ContainerLogResponse, ContainerInfoResponse,
 )
-from app.services import application_service, discovery_service
+from app.services import application_service, discovery_service, container_service
 from app.database import async_session_factory
 from app.workers.scheduler import refresh_monitoring_job_for_application, remove_monitoring_job
 from app.services.monitoring_service import run_check_for_application
@@ -48,6 +50,8 @@ def _serialize_app(app, current_state_since: str | None = None) -> dict:
         "consecutive_failures_threshold": app.consecutive_failures_threshold,
         "consecutive_recovery_threshold": app.consecutive_recovery_threshold,
         "slow_threshold_ms": app.slow_threshold_ms,
+        "frontend_container": app.frontend_container,
+        "backend_container": app.backend_container,
         "created_at": app.created_at.isoformat() if app.created_at else "",
         "updated_at": app.updated_at.isoformat() if app.updated_at else "",
         "status": _serialize_status(
@@ -263,3 +267,83 @@ async def rediscover(
 
     background_tasks.add_task(_run_discovery_background, str(app.id), app.base_url)
     return {"status": "discovery_started", "application_id": str(app_id)}
+
+
+# ── Container endpoints ───────────────────────────────────────────────────────
+
+@router.get("/{app_id}/containers", response_model=ContainerDiscoveryResponse)
+async def discover_containers(app_id: UUID, db: DbSession, current_user: CurrentUser):
+    app = await application_service.get_application(db, app_id)
+    if not app:
+        raise HTTPException(status_code=404, detail="Application not found")
+
+    match = await container_service.discover_containers(app.base_url)
+    all_containers = await container_service.list_containers()
+
+    return {
+        "frontend": match.frontend,
+        "backend": match.backend,
+        "current_frontend": app.frontend_container,
+        "current_backend": app.backend_container,
+        "all_matches": [
+            {"name": c.name, "image": c.image, "status": c.status, "ports": c.ports}
+            for c in (match.all_matches or [])
+        ],
+        "all_containers": [
+            {"name": c.name, "image": c.image, "status": c.status, "ports": c.ports}
+            for c in all_containers
+        ],
+    }
+
+
+@router.patch("/{app_id}/containers")
+async def update_container_mapping(
+    app_id: UUID, req: UpdateContainerMappingRequest,
+    db: DbSession, current_user: CurrentUser,
+):
+    app = await application_service.get_application(db, app_id)
+    if not app:
+        raise HTTPException(status_code=404, detail="Application not found")
+
+    updates = req.model_dump(exclude_unset=True)
+    for field, val in updates.items():
+        setattr(app, field, val or None)
+    await db.flush()
+
+    return {
+        "frontend_container": app.frontend_container,
+        "backend_container": app.backend_container,
+    }
+
+
+@router.get("/{app_id}/logs/{container_type}", response_model=ContainerLogResponse)
+async def get_container_logs(
+    app_id: UUID, container_type: str,
+    db: DbSession, current_user: CurrentUser,
+    tail: int = Query(200, ge=10, le=5000),
+    since: str | None = Query(None),
+):
+    if container_type not in ("frontend", "backend"):
+        raise HTTPException(status_code=400, detail="container_type must be 'frontend' or 'backend'")
+
+    app = await application_service.get_application(db, app_id)
+    if not app:
+        raise HTTPException(status_code=404, detail="Application not found")
+
+    container_name = app.frontend_container if container_type == "frontend" else app.backend_container
+    if not container_name:
+        raise HTTPException(status_code=404, detail=f"No {container_type} container configured")
+
+    log_text, success = await container_service.fetch_logs(
+        container_name, tail=tail, since=since,
+    )
+
+    lines = log_text.strip().splitlines() if log_text.strip() else []
+    return {
+        "container_name": container_name,
+        "container_type": container_type,
+        "lines": log_text.strip(),
+        "line_count": len(lines),
+        "success": success,
+        "error": None if success else log_text,
+    }
