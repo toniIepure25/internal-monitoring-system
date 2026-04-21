@@ -166,10 +166,9 @@ async def get_state_since_map(
 ) -> dict[UUID, str]:
     """Return {app_id: iso_timestamp} for when each app entered its current state.
 
-    Walks backwards through health_checks to find the first check where the
-    status differs from the current status. The check right after that is when
-    the current state began. If all checks share the same status, the oldest
-    check is used.
+    Finds the most recent health check with a *different* status, then looks up
+    the first check with the current status after that point.  If no different
+    status exists, uses the oldest health check for the app.
     """
     if not apps:
         return {}
@@ -180,25 +179,37 @@ async def get_state_since_map(
         if current is None:
             continue
 
-        # Fetch recent checks newest-first
-        checks_result = await db.execute(
-            select(HealthCheck.status, HealthCheck.checked_at)
-            .where(HealthCheck.application_id == app.id)
+        last_diff = await db.execute(
+            select(HealthCheck.checked_at)
+            .where(
+                HealthCheck.application_id == app.id,
+                HealthCheck.status != current,
+            )
             .order_by(HealthCheck.checked_at.desc())
-            .limit(200)
+            .limit(1)
         )
-        rows = checks_result.all()
-        if not rows:
-            continue
+        last_diff_at = last_diff.scalar_one_or_none()
 
-        # Walk backwards; find when the status first changed
-        since = rows[0][1]  # default: most recent check
-        for status, checked_at in rows:
-            if status != current:
-                break
-            since = checked_at
-
-        result_map[app.id] = since.isoformat()
+        if last_diff_at:
+            first_current = await db.execute(
+                select(func.min(HealthCheck.checked_at))
+                .where(
+                    HealthCheck.application_id == app.id,
+                    HealthCheck.status == current,
+                    HealthCheck.checked_at > last_diff_at,
+                )
+            )
+            since = first_current.scalar_one_or_none()
+            if since:
+                result_map[app.id] = since.isoformat()
+        else:
+            oldest = await db.execute(
+                select(func.min(HealthCheck.checked_at))
+                .where(HealthCheck.application_id == app.id)
+            )
+            oldest_at = oldest.scalar_one_or_none()
+            if oldest_at:
+                result_map[app.id] = oldest_at.isoformat()
 
     return result_map
 

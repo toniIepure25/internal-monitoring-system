@@ -115,12 +115,25 @@ export default function ApplicationDetailPage() {
                     ["Last checked", app.status?.last_checked_at ? formatDate(app.status.last_checked_at) : "Never"],
                     ["Response", app.status?.last_response_time_ms != null ? `${app.status.last_response_time_ms}ms` : "—"],
                     ["HTTP status", app.status?.last_http_status || "—"],
-                    [app.status?.status === "UP" ? "Uptime" : app.status?.status === "DOWN" ? "Down for" : "In state for", app.status?.current_state_since ? formatDuration(app.status.current_state_since) : "—"],
+                    [app.status?.status === "UP" ? "Uptime" : app.status?.status === "DOWN" ? "Down for" : "In state for", "__uptime__"],
                     ["Created", formatDate(app.created_at)],
                   ].map(([label, value]) => (
                     <div key={label as string}>
                       <dt className="text-[11px] text-fgSubtle">{label}</dt>
-                      <dd className="mt-0.5 truncate font-medium text-fg">{value}</dd>
+                      <dd className="mt-0.5 truncate font-medium text-fg">
+                        {value === "__uptime__" ? (
+                          app.status?.current_state_since ? (
+                            <span className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-medium tabular-nums ${
+                              app.status?.status === "UP" ? "bg-success/10 text-success" :
+                              app.status?.status === "DOWN" ? "bg-danger/10 text-danger" :
+                              "bg-warning/10 text-warning"
+                            }`}>
+                              <svg className="h-3 w-3" viewBox="0 0 12 12" fill="none"><path d={app.status?.status === "DOWN" ? "M6 2v8M3 7l3 3 3-3" : "M6 10V2M3 5l3-3 3 3"} stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                              {formatDuration(app.status.current_state_since)}
+                            </span>
+                          ) : "—"
+                        ) : value}
+                      </dd>
                     </div>
                   ))}
                 </dl>

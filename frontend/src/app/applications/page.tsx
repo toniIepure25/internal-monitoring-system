@@ -136,7 +136,16 @@ export default function ApplicationsPage() {
                     <Td>
                       <div className="flex items-center gap-2">
                         <StatusBadge status={app.status?.status || "UNKNOWN"} />
-                        {app.status?.current_state_since && <span className="text-[11px] tabular-nums text-fgSubtle">{formatDuration(app.status.current_state_since)}</span>}
+                        {app.status?.current_state_since && (
+                          <span className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-medium tabular-nums ${
+                            app.status?.status === "UP" ? "bg-success/10 text-success" :
+                            app.status?.status === "DOWN" ? "bg-danger/10 text-danger" :
+                            "bg-warning/10 text-warning"
+                          }`}>
+                            <svg className="h-3 w-3" viewBox="0 0 12 12" fill="none"><path d={app.status?.status === "DOWN" ? "M6 2v8M3 7l3 3 3-3" : "M6 10V2M3 5l3-3 3 3"} stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                            {formatDuration(app.status.current_state_since)}
+                          </span>
+                        )}
                       </div>
                     </Td>
                     <Td className="tabular-nums text-fgMuted">{app.status?.last_response_time_ms != null ? `${app.status.last_response_time_ms}ms` : "—"}</Td>
