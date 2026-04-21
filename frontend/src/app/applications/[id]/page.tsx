@@ -12,7 +12,7 @@ import { ResponseSparkline } from "@/components/ui/response-sparkline";
 import { UptimeBar } from "@/components/ui/uptime-bar";
 import { useToast } from "@/components/ui/toast";
 import { api } from "@/lib/api";
-import { formatDate } from "@/lib/utils";
+import { formatDate, formatDuration } from "@/lib/utils";
 import type { Application, HealthCandidate, Incident, Subscription, HealthCheckEntry } from "@/types";
 
 interface AppDetail extends Application { health_candidates: HealthCandidate[]; }
@@ -115,7 +115,7 @@ export default function ApplicationDetailPage() {
                     ["Last checked", app.status?.last_checked_at ? formatDate(app.status.last_checked_at) : "Never"],
                     ["Response", app.status?.last_response_time_ms != null ? `${app.status.last_response_time_ms}ms` : "—"],
                     ["HTTP status", app.status?.last_http_status || "—"],
-                    ["Environment", app.environment || "—"],
+                    ["In current state", app.status?.current_state_since ? formatDuration(app.status.current_state_since) : "—"],
                     ["Created", formatDate(app.created_at)],
                   ].map(([label, value]) => (
                     <div key={label as string}>

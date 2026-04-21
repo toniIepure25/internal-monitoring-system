@@ -46,6 +46,7 @@ export interface ApplicationStatusInfo {
   last_http_status: number | null;
   consecutive_failures: number;
   consecutive_successes: number;
+  current_state_since: string | null;
 }
 
 export interface HealthCandidate {

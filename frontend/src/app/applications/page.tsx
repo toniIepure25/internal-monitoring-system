@@ -16,6 +16,7 @@ import { useToast } from "@/components/ui/toast";
 import { useConfirm } from "@/components/ui/confirm-dialog";
 import { UptimeBar } from "@/components/ui/uptime-bar";
 import { api } from "@/lib/api";
+import { formatDuration } from "@/lib/utils";
 import type { Application, HealthCheckEntry } from "@/types";
 
 const PAGE_SIZE = 20;
@@ -132,7 +133,12 @@ export default function ApplicationsPage() {
                     </Td>
                     <Td className="max-w-[180px] truncate text-fgMuted">{app.base_url}</Td>
                     <Td>{app.environment ? <span className="rounded bg-surfaceRaised px-1.5 py-0.5 text-[11px] font-medium text-fgMuted">{app.environment}</span> : <span className="text-fgSubtle">—</span>}</Td>
-                    <Td><StatusBadge status={app.status?.status || "UNKNOWN"} /></Td>
+                    <Td>
+                      <div className="flex items-center gap-2">
+                        <StatusBadge status={app.status?.status || "UNKNOWN"} />
+                        {app.status?.current_state_since && <span className="text-[11px] tabular-nums text-fgSubtle">{formatDuration(app.status.current_state_since)}</span>}
+                      </div>
+                    </Td>
                     <Td className="tabular-nums text-fgMuted">{app.status?.last_response_time_ms != null ? `${app.status.last_response_time_ms}ms` : "—"}</Td>
                     <Td>{healthHistory[app.id]?.length > 0 ? <UptimeBar checks={healthHistory[app.id]} slots={20} /> : <span className="text-fgSubtle">—</span>}</Td>
                     <Td className="text-right">

@@ -8,6 +8,7 @@ from sqlalchemy.orm import selectinload
 from app.models.application import Application, DetectionSource
 from app.models.application_status import ApplicationStatus, AppState
 from app.models.health_check import HealthCheck
+from app.models.incident import Incident
 from app.utils.url import normalize_url
 from app.utils.logging import get_logger
 
@@ -159,6 +160,36 @@ async def set_health_url(
     await db.flush()
     logger.info("health_url_set", app_id=str(app_id), health_url=health_url)
     return app
+
+
+async def get_state_since_map(
+    db: AsyncSession, app_ids: list[UUID],
+) -> dict[UUID, str]:
+    """Return {app_id: iso_timestamp} for when each app entered its current state.
+
+    Uses the most recent incident per app. The incident's started_at marks
+    the moment the app transitioned into its current state.
+    """
+    if not app_ids:
+        return {}
+
+    from sqlalchemy.sql import text
+
+    # Lateral / DISTINCT ON is Postgres-specific but we're on Postgres
+    result = await db.execute(
+        text(
+            """
+            SELECT DISTINCT ON (application_id)
+                   application_id, started_at
+              FROM incidents
+             WHERE application_id = ANY(:ids)
+             ORDER BY application_id, started_at DESC
+            """
+        ),
+        {"ids": app_ids},
+    )
+    rows = result.fetchall()
+    return {row[0]: row[1].isoformat() for row in rows}
 
 
 async def get_health_history(

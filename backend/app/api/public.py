@@ -7,11 +7,12 @@ from app.models.application import Application
 from app.models.application_status import AppState
 from app.models.health_check import HealthCheck
 from app.models.incident import Incident
+from app.services import application_service
 
 router = APIRouter()
 
 
-def _app_status_serialized(s) -> dict | None:
+def _app_status_serialized(s, current_state_since: str | None = None) -> dict | None:
     if not s:
         return None
     return {
@@ -19,6 +20,7 @@ def _app_status_serialized(s) -> dict | None:
         "last_checked_at": s.last_checked_at.isoformat() if s.last_checked_at else None,
         "last_response_time_ms": s.last_response_time_ms,
         "last_http_status": s.last_http_status,
+        "current_state_since": current_state_since,
     }
 
 
@@ -32,6 +34,8 @@ async def public_status(db: DbSession):
         .order_by(Application.display_name)
     )
     apps = list(result.scalars().all())
+
+    since_map = await application_service.get_state_since_map(db, [a.id for a in apps])
 
     statuses = [a.status for a in apps if a.status]
     down_count = sum(1 for s in statuses if s.status == AppState.DOWN)
@@ -60,7 +64,10 @@ async def public_status(db: DbSession):
                 "id": str(a.id),
                 "display_name": a.display_name,
                 "base_url": a.base_url,
-                "status": _app_status_serialized(a.status),
+                "status": _app_status_serialized(
+                    a.status,
+                    current_state_since=since_map.get(a.id) or (a.created_at.isoformat() if a.created_at else None),
+                ),
             }
             for a in apps
         ],

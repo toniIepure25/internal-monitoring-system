@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { UptimeBar } from "@/components/ui/uptime-bar";
-import { formatDate } from "@/lib/utils";
+import { formatDate, formatDuration } from "@/lib/utils";
 import type { AppState, HealthCheckEntry } from "@/types";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8090";
@@ -16,6 +16,7 @@ interface StatusApp {
     last_checked_at: string | null;
     last_response_time_ms: number | null;
     last_http_status: number | null;
+    current_state_since: string | null;
   } | null;
 }
 
@@ -148,6 +149,9 @@ export default function PublicStatusPage() {
                         <div className="flex items-center gap-1.5">
                           <span className={`h-2 w-2 rounded-full ${STATUS_DOT[s] || STATUS_DOT.UNKNOWN}`} />
                           <span className={`text-[11px] font-medium ${STATUS_TEXT_COLOR[s] || STATUS_TEXT_COLOR.UNKNOWN}`}>{STATUS_LABEL[s] || s}</span>
+                          {app.status?.current_state_since && (
+                            <span className="text-[11px] tabular-nums text-fgSubtle">{formatDuration(app.status.current_state_since)}</span>
+                          )}
                         </div>
                       </div>
                     </div>

@@ -17,7 +17,7 @@ from app.services.monitoring_service import run_check_for_application
 router = APIRouter()
 
 
-def _serialize_status(s) -> dict | None:
+def _serialize_status(s, current_state_since: str | None = None) -> dict | None:
     if not s:
         return None
     return {
@@ -27,10 +27,11 @@ def _serialize_status(s) -> dict | None:
         "last_http_status": s.last_http_status,
         "consecutive_failures": s.consecutive_failures,
         "consecutive_successes": s.consecutive_successes,
+        "current_state_since": current_state_since,
     }
 
 
-def _serialize_app(app) -> dict:
+def _serialize_app(app, current_state_since: str | None = None) -> dict:
     return {
         "id": str(app.id),
         "display_name": app.display_name,
@@ -49,7 +50,10 @@ def _serialize_app(app) -> dict:
         "slow_threshold_ms": app.slow_threshold_ms,
         "created_at": app.created_at.isoformat() if app.created_at else "",
         "updated_at": app.updated_at.isoformat() if app.updated_at else "",
-        "status": _serialize_status(app.status) if hasattr(app, "status") else None,
+        "status": _serialize_status(
+            app.status if hasattr(app, "status") else None,
+            current_state_since=current_state_since or (app.created_at.isoformat() if app.created_at else None),
+        ),
     }
 
 
@@ -137,7 +141,11 @@ async def list_applications(
         db, search=search, environment=environment, is_active=is_active,
         offset=offset, limit=limit,
     )
-    return {"items": [_serialize_app(a) for a in apps], "total": total}
+    since_map = await application_service.get_state_since_map(db, [a.id for a in apps])
+    return {
+        "items": [_serialize_app(a, current_state_since=since_map.get(a.id)) for a in apps],
+        "total": total,
+    }
 
 
 @router.get("/{app_id}", response_model=ApplicationDetailResponse)
@@ -146,7 +154,8 @@ async def get_application(app_id: UUID, db: DbSession, current_user: CurrentUser
     if not app:
         raise HTTPException(status_code=404, detail="Application not found")
 
-    data = _serialize_app(app)
+    since_map = await application_service.get_state_since_map(db, [app.id])
+    data = _serialize_app(app, current_state_since=since_map.get(app.id))
     data["health_candidates"] = [
         {
             "id": str(c.id),
