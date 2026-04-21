@@ -8,7 +8,6 @@ from sqlalchemy.orm import selectinload
 from app.models.application import Application, DetectionSource
 from app.models.application_status import ApplicationStatus, AppState
 from app.models.health_check import HealthCheck
-from app.models.incident import Incident
 from app.utils.url import normalize_url
 from app.utils.logging import get_logger
 
@@ -163,27 +162,44 @@ async def set_health_url(
 
 
 async def get_state_since_map(
-    db: AsyncSession, app_ids: list[UUID],
+    db: AsyncSession, apps: list,
 ) -> dict[UUID, str]:
     """Return {app_id: iso_timestamp} for when each app entered its current state.
 
-    Uses the most recent incident per app. The incident's started_at marks
-    the moment the app transitioned into its current state.
+    Walks backwards through health_checks to find the first check where the
+    status differs from the current status. The check right after that is when
+    the current state began. If all checks share the same status, the oldest
+    check is used.
     """
-    if not app_ids:
+    if not apps:
         return {}
 
     result_map: dict[UUID, str] = {}
-    for aid in app_ids:
-        result = await db.execute(
-            select(Incident.started_at)
-            .where(Incident.application_id == aid)
-            .order_by(Incident.started_at.desc())
-            .limit(1)
+    for app in apps:
+        current = app.status.status if app.status else None
+        if current is None:
+            continue
+
+        # Fetch recent checks newest-first
+        checks_result = await db.execute(
+            select(HealthCheck.status, HealthCheck.checked_at)
+            .where(HealthCheck.application_id == app.id)
+            .order_by(HealthCheck.checked_at.desc())
+            .limit(200)
         )
-        row = result.scalar_one_or_none()
-        if row is not None:
-            result_map[aid] = row.isoformat()
+        rows = checks_result.all()
+        if not rows:
+            continue
+
+        # Walk backwards; find when the status first changed
+        since = rows[0][1]  # default: most recent check
+        for status, checked_at in rows:
+            if status != current:
+                break
+            since = checked_at
+
+        result_map[app.id] = since.isoformat()
+
     return result_map
 
 

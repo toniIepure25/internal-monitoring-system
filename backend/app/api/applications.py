@@ -141,7 +141,7 @@ async def list_applications(
         db, search=search, environment=environment, is_active=is_active,
         offset=offset, limit=limit,
     )
-    since_map = await application_service.get_state_since_map(db, [a.id for a in apps])
+    since_map = await application_service.get_state_since_map(db, apps)
     return {
         "items": [_serialize_app(a, current_state_since=since_map.get(a.id)) for a in apps],
         "total": total,
@@ -154,7 +154,7 @@ async def get_application(app_id: UUID, db: DbSession, current_user: CurrentUser
     if not app:
         raise HTTPException(status_code=404, detail="Application not found")
 
-    since_map = await application_service.get_state_since_map(db, [app.id])
+    since_map = await application_service.get_state_since_map(db, [app])
     data = _serialize_app(app, current_state_since=since_map.get(app.id))
     data["health_candidates"] = [
         {

@@ -35,7 +35,7 @@ async def public_status(db: DbSession):
     )
     apps = list(result.scalars().all())
 
-    since_map = await application_service.get_state_since_map(db, [a.id for a in apps])
+    since_map = await application_service.get_state_since_map(db, apps)
 
     statuses = [a.status for a in apps if a.status]
     down_count = sum(1 for s in statuses if s.status == AppState.DOWN)
