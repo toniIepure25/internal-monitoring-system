@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { ArrowLeftIcon, ClockIcon } from "@heroicons/react/24/outline";
@@ -64,7 +64,6 @@ const ease = [0.22, 1, 0.36, 1] as [number, number, number, number];
 
 export default function IncidentDetailPage() {
   const params = useParams();
-  const router = useRouter();
   const [incident, setIncident] = useState<Incident | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -82,7 +81,7 @@ export default function IncidentDetailPage() {
     return () => window.clearInterval(interval);
   }, [params.id]);
 
-  if (loading) return <AppShell><p className="text-sm text-fgMuted">Loading…</p></AppShell>;
+  if (loading) return <AppShell><div className="space-y-4"><div className="h-6 w-48 animate-pulse rounded bg-surfaceRaised" /><div className="h-[160px] animate-pulse rounded-lg bg-surfaceRaised" /><div className="h-[120px] animate-pulse rounded-lg bg-surfaceRaised" /></div></AppShell>;
   if (!incident) return <AppShell><div className="rounded-lg bg-danger/10 px-4 py-3 text-[13px] text-danger">Incident not found</div></AppShell>;
 
   const timeline = buildTimeline(incident);
@@ -92,9 +91,9 @@ export default function IncidentDetailPage() {
     <AppShell>
       <PageTransition>
         <div className="mb-5">
-          <button type="button" onClick={() => router.back()} className="mb-3 inline-flex items-center gap-1 text-xs text-fgMuted hover:text-fg">
-            <ArrowLeftIcon className="h-3 w-3" /> Back
-          </button>
+          <Link href="/incidents" className="mb-3 inline-flex items-center gap-1 text-xs text-fgMuted hover:text-fg">
+            <ArrowLeftIcon className="h-3 w-3" /> Incidents
+          </Link>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <div className="flex flex-wrap items-center gap-2">

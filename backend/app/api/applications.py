@@ -239,6 +239,20 @@ async def get_health_history(
     }
 
 
+@router.post("/{app_id}/check-now", status_code=status.HTTP_202_ACCEPTED)
+async def check_now(
+    app_id: UUID, db: DbSession, current_user: CurrentUser, background_tasks: BackgroundTasks,
+):
+    app = await application_service.get_application(db, app_id)
+    if not app:
+        raise HTTPException(status_code=404, detail="Application not found")
+    if not app.health_url:
+        raise HTTPException(status_code=400, detail="No health URL configured")
+
+    background_tasks.add_task(_run_initial_check_background, str(app.id))
+    return {"status": "check_queued", "application_id": str(app_id)}
+
+
 @router.post("/{app_id}/rediscover", status_code=status.HTTP_202_ACCEPTED)
 async def rediscover(
     app_id: UUID, db: DbSession, current_user: CurrentUser, background_tasks: BackgroundTasks,

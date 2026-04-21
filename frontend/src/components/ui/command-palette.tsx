@@ -6,9 +6,10 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   HomeIcon, CubeTransparentIcon, ServerIcon, ExclamationTriangleIcon,
   BellIcon, SparklesIcon, UserGroupIcon, Cog6ToothIcon, ShieldCheckIcon,
-  PlusIcon, MagnifyingGlassIcon,
+  PlusIcon, MagnifyingGlassIcon, GlobeAltIcon,
 } from "@heroicons/react/24/outline";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/lib/auth";
 
 interface Item {
   id: string;
@@ -20,7 +21,7 @@ interface Item {
   group: string;
 }
 
-const pages: Item[] = [
+const pages: (Item & { adminOnly?: boolean })[] = [
   { id: "dashboard", label: "Dashboard", icon: HomeIcon, href: "/dashboard", group: "Pages" },
   { id: "applications", label: "Applications", icon: CubeTransparentIcon, href: "/applications", group: "Pages" },
   { id: "hosts", label: "Hosts", icon: ServerIcon, href: "/hosts", group: "Pages" },
@@ -29,7 +30,8 @@ const pages: Item[] = [
   { id: "subscriptions", label: "Subscriptions", icon: SparklesIcon, href: "/subscriptions", group: "Pages" },
   { id: "groups", label: "Groups", icon: UserGroupIcon, href: "/groups", group: "Pages" },
   { id: "settings", label: "Settings", icon: Cog6ToothIcon, href: "/settings", group: "Pages" },
-  { id: "admin", label: "Admin", icon: ShieldCheckIcon, href: "/admin", group: "Pages" },
+  { id: "status", label: "Status page", description: "Public system status", icon: GlobeAltIcon, href: "/status", group: "Pages" },
+  { id: "admin", label: "Admin", icon: ShieldCheckIcon, href: "/admin", group: "Pages", adminOnly: true },
 ];
 
 const actions: Item[] = [
@@ -43,6 +45,7 @@ export function CommandPalette() {
   const [selected, setSelected] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
+  const { user } = useAuth();
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -64,7 +67,11 @@ export function CommandPalette() {
     }
   }, [open]);
 
-  const allItems = useMemo(() => [...pages, ...actions], []);
+  const isAdmin = user?.role === "admin";
+  const allItems = useMemo(() => [
+    ...pages.filter((p) => !p.adminOnly || isAdmin),
+    ...actions,
+  ], [isAdmin]);
 
   const filtered = useMemo(() => {
     if (!query) return allItems;

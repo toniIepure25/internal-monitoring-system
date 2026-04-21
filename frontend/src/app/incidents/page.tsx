@@ -5,7 +5,7 @@ import Link from "next/link";
 import { AppShell } from "@/components/layout/app-shell";
 import { PageHeader } from "@/components/ui/page-header";
 import { SeverityBadge, IncidentTypeBadge } from "@/components/ui/status-badge";
-import { TableSkeleton, ContentTransition } from "@/components/ui/loading-skeleton";
+import { TableSkeleton } from "@/components/ui/loading-skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
 import { DataTableShell, SortableTh, Td, type SortState, toggleSort } from "@/components/ui/data-table-shell";
 import { Pagination } from "@/components/ui/pagination";

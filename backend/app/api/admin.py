@@ -1,8 +1,11 @@
+import os
+import time
+import platform
 from uuid import UUID
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query, status
-from sqlalchemy import select, func
+from sqlalchemy import select, func, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -15,7 +18,9 @@ from app.models.host_status import HostStatus, HostState
 from app.models.incident import Incident, IncidentStatus
 from app.services import application_service
 from app.api.applications import _serialize_app
-from app.workers.scheduler import refresh_monitoring_job_for_application
+from app.workers.scheduler import refresh_monitoring_job_for_application, get_scheduler_status
+
+_process_start = time.time()
 
 router = APIRouter()
 
@@ -109,6 +114,24 @@ async def admin_system_status(db: DbSession, admin: AdminUser):
         select(func.count(Incident.id)).where(Incident.status == IncidentStatus.ONGOING)
     )
 
+    db_latency_ms: float | None = None
+    db_version: str | None = None
+    try:
+        t0 = time.time()
+        result = await db.execute(text("SELECT version()"))
+        db_latency_ms = round((time.time() - t0) * 1000, 1)
+        row = result.scalar_one_or_none()
+        db_version = str(row).split(",")[0] if row else None
+    except Exception:
+        pass
+
+    import resource
+    mem_mb = round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024, 1)
+    if platform.system() == "Darwin":
+        mem_mb = round(mem_mb / 1024, 1)
+
+    process_uptime_s = round(time.time() - _process_start)
+
     return {
         "total_applications": app_count.scalar_one(),
         "total_users": user_count.scalar_one(),
@@ -116,4 +139,11 @@ async def admin_system_status(db: DbSession, admin: AdminUser):
         "hosts_online": hosts_online.scalar_one(),
         "active_incidents": active_incidents.scalar_one(),
         "status": "operational",
+        "scheduler": get_scheduler_status(),
+        "db_latency_ms": db_latency_ms,
+        "db_version": db_version,
+        "python_version": platform.python_version(),
+        "process_uptime_seconds": process_uptime_s,
+        "memory_mb": mem_mb,
+        "os": f"{platform.system()} {platform.release()}",
     }

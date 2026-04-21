@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { AppShell } from "@/components/layout/app-shell";
 import { PageHeader } from "@/components/ui/page-header";
 import { TableSkeleton } from "@/components/ui/loading-skeleton";
@@ -19,18 +20,36 @@ const PAGE_SIZE = 20;
 function channelLabel(c: string) { return { email: "Email", telegram: "Telegram", browser_push: "Push" }[c] || c; }
 
 export default function NotificationsPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
   const [logs, setLogs] = useState<NotificationLogEntry[]>([]);
   const [total, setTotal] = useState(0);
   const [apps, setApps] = useState<Application[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [clearing, setClearing] = useState(false);
-  const [search, setSearch] = useState(""); const [appFilter, setAppFilter] = useState(""); const [channel, setChannel] = useState("");
-  const [dateFrom, setDateFrom] = useState(""); const [dateTo, setDateTo] = useState("");
+
+  const [search, setSearch] = useState(searchParams.get("q") || "");
+  const [appFilter, setAppFilter] = useState(searchParams.get("app") || "");
+  const [channel, setChannel] = useState(searchParams.get("channel") || "");
+  const [dateFrom, setDateFrom] = useState(searchParams.get("from") || "");
+  const [dateTo, setDateTo] = useState(searchParams.get("to") || "");
   const [sort, setSort] = useState<SortState | null>(null);
   const [page, setPage] = useState(1);
   const toast = useToast();
   const confirm = useConfirm();
+
+  useEffect(() => {
+    const params = new URLSearchParams();
+    if (search) params.set("q", search);
+    if (appFilter) params.set("app", appFilter);
+    if (channel) params.set("channel", channel);
+    if (dateFrom) params.set("from", dateFrom);
+    if (dateTo) params.set("to", dateTo);
+    const qs = params.toString();
+    router.replace(qs ? `?${qs}` : "/notifications", { scroll: false });
+  }, [search, appFilter, channel, dateFrom, dateTo, router]);
 
   function buildParams() {
     const p = new URLSearchParams({ limit: "200" });

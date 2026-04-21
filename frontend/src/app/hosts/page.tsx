@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { AppShell } from "@/components/layout/app-shell";
 import { PageHeader } from "@/components/ui/page-header";
 import { HostStatusBadge } from "@/components/ui/status-badge";
-import { TableSkeleton, ContentTransition } from "@/components/ui/loading-skeleton";
+import { TableSkeleton } from "@/components/ui/loading-skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
 import { DataTableShell, SortableTh, Td, type SortState, toggleSort } from "@/components/ui/data-table-shell";
 import { Pagination } from "@/components/ui/pagination";
@@ -32,7 +32,7 @@ export default function HostsPage() {
     setLoading(false);
   }
 
-  useEffect(() => { load(); const i = window.setInterval(load, 10000); return () => window.clearInterval(i); }, []);
+  useEffect(() => { const t = setTimeout(load, 300); const i = window.setInterval(load, 10000); return () => { clearTimeout(t); window.clearInterval(i); }; }, [search]);
 
   const sorted = useMemo(() => {
     if (!sort) return hosts;
@@ -58,9 +58,8 @@ export default function HostsPage() {
     <AppShell>
       <PageTransition>
         <PageHeader eyebrow="Infrastructure" title="Hosts" description={`${total} registered hosts`} actions={<Button onClick={() => router.push("/hosts/new")}>Register host</Button>} />
-        <div className="mt-4 mb-3 flex items-center gap-2">
-          <input type="text" placeholder="Search hosts…" value={search} onChange={(e) => setSearch(e.target.value)} onKeyDown={(e) => e.key === "Enter" && load()} className="filter-input max-w-xs" />
-          <Button variant="secondary" onClick={load}>Search</Button>
+        <div className="mt-4 mb-3">
+          <input type="text" placeholder="Search hosts…" value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} className="filter-input max-w-xs" />
         </div>
         {loading ? (
           <DataTableShell><TableSkeleton cols={4} rows={5} /></DataTableShell>

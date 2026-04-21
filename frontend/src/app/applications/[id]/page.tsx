@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeftIcon } from "@heroicons/react/24/outline";
 import { AppShell } from "@/components/layout/app-shell";
@@ -20,15 +20,18 @@ interface AppDetail extends Application { health_candidates: HealthCandidate[]; 
 
 export default function ApplicationDetailPage() {
   const params = useParams();
-  const router = useRouter();
   const toast = useToast();
   const [app, setApp] = useState<AppDetail | null>(null);
   const [incidents, setIncidents] = useState<Incident[]>([]);
   const [loading, setLoading] = useState(true);
   const [subscribing, setSubscribing] = useState(false);
   const [rediscovering, setRediscovering] = useState(false);
+  const [checking, setChecking] = useState(false);
   const [subscription, setSubscription] = useState<Subscription | null>(null);
   const [healthHistory, setHealthHistory] = useState<HealthCheckEntry[]>([]);
+  const [editingConfig, setEditingConfig] = useState(false);
+  const [configDraft, setConfigDraft] = useState({ timeout_seconds: 0, slow_threshold_ms: 0, consecutive_failures_threshold: 0, consecutive_recovery_threshold: 0, monitoring_interval_seconds: 0 });
+  const [savingConfig, setSavingConfig] = useState(false);
 
   useEffect(() => {
     async function load() {
@@ -68,6 +71,49 @@ export default function ApplicationDetailPage() {
     setRediscovering(false);
   };
 
+  const startEditConfig = () => {
+    if (!app) return;
+    setConfigDraft({
+      timeout_seconds: app.timeout_seconds,
+      slow_threshold_ms: app.slow_threshold_ms,
+      consecutive_failures_threshold: app.consecutive_failures_threshold,
+      consecutive_recovery_threshold: app.consecutive_recovery_threshold,
+      monitoring_interval_seconds: app.monitoring_interval_seconds,
+    });
+    setEditingConfig(true);
+  };
+
+  const handleSaveConfig = async () => {
+    if (!app) return;
+    setSavingConfig(true);
+    try {
+      const updated = await api.patch<AppDetail>(`/api/applications/${app.id}`, configDraft);
+      setApp({ ...app, ...updated, health_candidates: app.health_candidates });
+      toast.success("Configuration updated");
+      setEditingConfig(false);
+    } catch (err: unknown) { toast.error(err instanceof Error ? err.message : "Failed to save"); }
+    setSavingConfig(false);
+  };
+
+  const handleCheckNow = async () => {
+    if (!app) return;
+    setChecking(true);
+    try { await api.post(`/api/applications/${app.id}/check-now`); toast.success("Health check queued"); } catch (err: unknown) { toast.error(err instanceof Error ? err.message : "Failed"); }
+    setChecking(false);
+  };
+
+  const handleTogglePref = async (key: "notify_on_down" | "notify_on_up" | "notify_on_degraded" | "notify_on_slow") => {
+    if (!subscription) return;
+    const newVal = !subscription[key];
+    setSubscription({ ...subscription, [key]: newVal });
+    try {
+      await api.patch<Subscription>(`/api/subscriptions/${subscription.id}`, { [key]: newVal });
+    } catch {
+      setSubscription({ ...subscription, [key]: !newVal });
+      toast.error("Failed to update preference");
+    }
+  };
+
   const handleSetHealthUrl = async (url: string) => {
     if (!app) return;
     try {
@@ -77,16 +123,16 @@ export default function ApplicationDetailPage() {
     } catch (err: unknown) { toast.error(err instanceof Error ? err.message : "Failed"); }
   };
 
-  if (loading) return <AppShell><p className="text-sm text-fgMuted">Loading…</p></AppShell>;
+  if (loading) return <AppShell><div className="space-y-4"><div className="h-6 w-48 animate-pulse rounded bg-surfaceRaised" /><div className="h-[200px] animate-pulse rounded-lg bg-surfaceRaised" /><div className="h-[120px] animate-pulse rounded-lg bg-surfaceRaised" /></div></AppShell>;
   if (!app) return <AppShell><div className="rounded-lg bg-danger/10 px-4 py-3 text-[13px] text-danger">Application not found</div></AppShell>;
 
   return (
     <AppShell>
       <PageTransition>
         <div className="mb-5">
-          <button type="button" onClick={() => router.back()} className="mb-3 inline-flex items-center gap-1 text-xs text-fgMuted hover:text-fg">
-            <ArrowLeftIcon className="h-3 w-3" /> Back
-          </button>
+          <Link href="/applications" className="mb-3 inline-flex items-center gap-1 text-xs text-fgMuted hover:text-fg">
+            <ArrowLeftIcon className="h-3 w-3" /> Applications
+          </Link>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <div className="flex flex-wrap items-center gap-2">
@@ -97,6 +143,7 @@ export default function ApplicationDetailPage() {
               <p className="mt-0.5 text-xs text-fgMuted">{app.base_url}</p>
             </div>
             <div className="flex shrink-0 gap-2">
+              <Button onClick={handleCheckNow} disabled={checking} variant="secondary">{checking ? "…" : "Check now"}</Button>
               <Button onClick={handleSubscribe} disabled={subscribing}>{subscribing ? "…" : subscription ? "Unsubscribe" : "Subscribe"}</Button>
               <Button variant="secondary" onClick={handleRediscover} disabled={rediscovering}>{rediscovering ? "…" : "Re-discover"}</Button>
             </div>
@@ -181,9 +228,9 @@ export default function ApplicationDetailPage() {
             </Card></SectionItem>
           </div>
 
-          <SectionItem>
-            {app.health_candidates.length > 0 ? (
-              <Card>
+          <div className="space-y-4">
+            {app.health_candidates.length > 0 && (
+              <SectionItem><Card>
                 <CardHeader><CardTitle>Health candidates</CardTitle></CardHeader>
                 <div className="divide-y divide-border">
                   {app.health_candidates.sort((a, b) => b.score - a.score).map((c) => (
@@ -205,11 +252,44 @@ export default function ApplicationDetailPage() {
                     </div>
                   ))}
                 </div>
-              </Card>
-            ) : (
-              <Card>
-                <CardHeader><CardTitle>Configuration</CardTitle></CardHeader>
-                <CardContent>
+              </Card></SectionItem>
+            )}
+
+            <SectionItem><Card>
+              <CardHeader>
+                <CardTitle>Configuration</CardTitle>
+                {!editingConfig && (
+                  <button type="button" onClick={startEditConfig} className="text-[11px] font-medium text-accent hover:underline">Edit</button>
+                )}
+              </CardHeader>
+              <CardContent>
+                {editingConfig ? (
+                  <div className="space-y-3">
+                    {([
+                      { label: "Timeout (s)", key: "timeout_seconds" as const, min: 1, max: 60 },
+                      { label: "Slow threshold (ms)", key: "slow_threshold_ms" as const, min: 100, max: 30000 },
+                      { label: "Failures before DOWN", key: "consecutive_failures_threshold" as const, min: 1, max: 20 },
+                      { label: "Successes before UP", key: "consecutive_recovery_threshold" as const, min: 1, max: 10 },
+                      { label: "Check interval (s)", key: "monitoring_interval_seconds" as const, min: 10, max: 3600 },
+                    ] as const).map((field) => (
+                      <div key={field.key} className="flex items-center justify-between gap-2">
+                        <label className="text-[11px] text-fgSubtle">{field.label}</label>
+                        <input
+                          type="number"
+                          min={field.min}
+                          max={field.max}
+                          value={configDraft[field.key]}
+                          onChange={(e) => setConfigDraft((d) => ({ ...d, [field.key]: parseInt(e.target.value, 10) || 0 }))}
+                          className="w-20 rounded border border-border bg-canvas px-2 py-1 text-right text-[11px] font-medium tabular-nums text-fg outline-none focus:border-accent"
+                        />
+                      </div>
+                    ))}
+                    <div className="flex justify-end gap-2 border-t border-border pt-3">
+                      <Button variant="secondary" size="xs" onClick={() => setEditingConfig(false)}>Cancel</Button>
+                      <Button size="xs" onClick={handleSaveConfig} disabled={savingConfig}>{savingConfig ? "Saving…" : "Save"}</Button>
+                    </div>
+                  </div>
+                ) : (
                   <dl className="space-y-3 text-[13px]">
                     {[
                       ["Timeout", `${app.timeout_seconds}s`],
@@ -226,27 +306,42 @@ export default function ApplicationDetailPage() {
                       </div>
                     ))}
                   </dl>
-                  {subscription && (
-                    <div className="mt-4 border-t border-border pt-3">
-                      <p className="mb-2 text-[11px] font-medium text-fgSubtle">Notify me on</p>
-                      <div className="flex flex-wrap gap-1.5">
-                        {[
-                          { key: "notify_on_down", label: "Down", active: subscription.notify_on_down },
-                          { key: "notify_on_up", label: "Recovery", active: subscription.notify_on_up },
-                          { key: "notify_on_degraded", label: "Degraded", active: subscription.notify_on_degraded },
-                          { key: "notify_on_slow", label: "Slow", active: subscription.notify_on_slow },
-                        ].map((n) => (
-                          <span key={n.key} className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${n.active ? "bg-accent/10 text-accent" : "bg-surfaceRaised text-fgSubtle"}`}>
-                            {n.label}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  )}
+                )}
+              </CardContent>
+            </Card></SectionItem>
+
+            {subscription && (
+              <SectionItem><Card>
+                <CardHeader><CardTitle>Notification preferences</CardTitle></CardHeader>
+                <CardContent>
+                  <p className="mb-2.5 text-[11px] text-fgSubtle">Toggle which events trigger notifications for this app.</p>
+                  <div className="space-y-2">
+                    {([
+                      { key: "notify_on_down" as const, label: "Down", desc: "App becomes unreachable" },
+                      { key: "notify_on_up" as const, label: "Recovery", desc: "App comes back online" },
+                      { key: "notify_on_degraded" as const, label: "Degraded", desc: "App is partially impaired" },
+                      { key: "notify_on_slow" as const, label: "Slow", desc: "Response time exceeds threshold" },
+                    ] as const).map((n) => (
+                      <button
+                        key={n.key}
+                        type="button"
+                        onClick={() => handleTogglePref(n.key)}
+                        className="flex w-full items-center justify-between rounded-md px-2.5 py-2 text-left transition-colors hover:bg-surfaceRaised/50"
+                      >
+                        <div>
+                          <p className="text-[12px] font-medium text-fg">{n.label}</p>
+                          <p className="text-[10px] text-fgSubtle">{n.desc}</p>
+                        </div>
+                        <div className={`h-4 w-7 rounded-full transition-colors ${subscription[n.key] ? "bg-accent" : "bg-border"}`}>
+                          <div className={`mt-0.5 h-3 w-3 rounded-full bg-white shadow-sm transition-transform ${subscription[n.key] ? "translate-x-3.5" : "translate-x-0.5"}`} />
+                        </div>
+                      </button>
+                    ))}
+                  </div>
                 </CardContent>
-              </Card>
+              </Card></SectionItem>
             )}
-          </SectionItem>
+          </div>
         </SectionStagger>
       </PageTransition>
     </AppShell>

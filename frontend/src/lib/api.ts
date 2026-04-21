@@ -15,6 +15,11 @@ function getAccessToken(): string | null {
   return localStorage.getItem("access_token");
 }
 
+function getRefreshToken(): string | null {
+  if (typeof window === "undefined") return null;
+  return localStorage.getItem("refresh_token");
+}
+
 function setTokens(access: string, refresh: string) {
   localStorage.setItem("access_token", access);
   localStorage.setItem("refresh_token", refresh);
@@ -25,9 +30,39 @@ function clearTokens() {
   localStorage.removeItem("refresh_token");
 }
 
+let refreshPromise: Promise<boolean> | null = null;
+
+async function tryRefresh(): Promise<boolean> {
+  const rt = getRefreshToken();
+  if (!rt) return false;
+
+  if (refreshPromise) return refreshPromise;
+
+  refreshPromise = (async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/auth/refresh`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ refresh_token: rt }),
+      });
+      if (!res.ok) return false;
+      const data = await res.json();
+      setTokens(data.access_token, data.refresh_token);
+      return true;
+    } catch {
+      return false;
+    } finally {
+      refreshPromise = null;
+    }
+  })();
+
+  return refreshPromise;
+}
+
 async function request<T>(
   path: string,
   options: RequestInit = {},
+  _retried = false,
 ): Promise<T> {
   const token = getAccessToken();
   const headers: Record<string, string> = {
@@ -44,6 +79,18 @@ async function request<T>(
     cache: "no-store",
     headers,
   });
+
+  if (res.status === 401 && !_retried) {
+    const refreshed = await tryRefresh();
+    if (refreshed) {
+      return request<T>(path, options, true);
+    }
+    clearTokens();
+    if (typeof window !== "undefined") {
+      window.location.href = "/login";
+    }
+    throw new ApiError(401, "Unauthorized");
+  }
 
   if (res.status === 401) {
     clearTokens();
