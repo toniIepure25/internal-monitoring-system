@@ -8,10 +8,12 @@ import { StatusBadge, SeverityBadge } from "@/components/ui/status-badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { PageTransition, SectionStagger, SectionItem } from "@/components/ui/motion";
+import { ResponseSparkline } from "@/components/ui/response-sparkline";
+import { UptimeBar } from "@/components/ui/uptime-bar";
 import { useToast } from "@/components/ui/toast";
 import { api } from "@/lib/api";
 import { formatDate } from "@/lib/utils";
-import type { Application, HealthCandidate, Incident, Subscription } from "@/types";
+import type { Application, HealthCandidate, Incident, Subscription, HealthCheckEntry } from "@/types";
 
 interface AppDetail extends Application { health_candidates: HealthCandidate[]; }
 
@@ -25,17 +27,20 @@ export default function ApplicationDetailPage() {
   const [subscribing, setSubscribing] = useState(false);
   const [rediscovering, setRediscovering] = useState(false);
   const [subscription, setSubscription] = useState<Subscription | null>(null);
+  const [healthHistory, setHealthHistory] = useState<HealthCheckEntry[]>([]);
 
   useEffect(() => {
     async function load() {
       try {
-        const [appRes, incRes, subsRes] = await Promise.all([
+        const [appRes, incRes, subsRes, histRes] = await Promise.all([
           api.get<AppDetail>(`/api/applications/${params.id}`),
           api.get<{ items: Incident[] }>(`/api/incidents?application_id=${params.id}&limit=20`),
           api.get<{ items: Subscription[]; total: number }>(`/api/subscriptions?limit=200`),
+          api.get<{ items: HealthCheckEntry[] }>(`/api/applications/${params.id}/health-history?limit=50`).catch(() => ({ items: [] })),
         ]);
         setApp(appRes); setIncidents(incRes.items);
         setSubscription(subsRes.items.find((s) => s.application_id === params.id) || null);
+        setHealthHistory(histRes.items);
       } catch { /* noop */ }
       setLoading(false);
     }
@@ -119,6 +124,18 @@ export default function ApplicationDetailPage() {
                     </div>
                   ))}
                 </dl>
+                {healthHistory.length > 1 && (
+                  <div className="mt-4 space-y-3 border-t border-border pt-4">
+                    <div>
+                      <p className="text-[11px] text-fgSubtle">Response time trend</p>
+                      <ResponseSparkline checks={healthHistory} width={320} height={40} className="mt-1" />
+                    </div>
+                    <div>
+                      <p className="mb-1 text-[11px] text-fgSubtle">Uptime</p>
+                      <UptimeBar checks={healthHistory} slots={40} />
+                    </div>
+                  </div>
+                )}
               </CardContent>
             </Card></SectionItem>
 

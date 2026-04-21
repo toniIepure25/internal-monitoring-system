@@ -121,6 +121,25 @@
   }
 }
 
+@keyframes status-pulse-success {
+  0%   { box-shadow: 0 0 0 0 hsl(var(--success) / 0.55); }
+  70%  { box-shadow: 0 0 0 4px hsl(var(--success) / 0); }
+  100% { box-shadow: 0 0 0 0 hsl(var(--success) / 0); }
+}
+@keyframes status-pulse-danger {
+  0%   { box-shadow: 0 0 0 0 hsl(var(--danger) / 0.55); }
+  70%  { box-shadow: 0 0 0 4px hsl(var(--danger) / 0); }
+  100% { box-shadow: 0 0 0 0 hsl(var(--danger) / 0); }
+}
+@keyframes status-pulse-warning {
+  0%   { box-shadow: 0 0 0 0 hsl(var(--warning) / 0.55); }
+  70%  { box-shadow: 0 0 0 4px hsl(var(--warning) / 0); }
+  100% { box-shadow: 0 0 0 0 hsl(var(--warning) / 0); }
+}
+.animate-status-pulse-success { animation: status-pulse-success 2s ease-out infinite; }
+.animate-status-pulse-danger  { animation: status-pulse-danger 2s ease-out infinite; }
+.animate-status-pulse-warning { animation: status-pulse-warning 2s ease-out infinite; }
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;

@@ -20,10 +20,18 @@ const dotColors: Record<StatusVariant, string> = {
   info:    "bg-accent",
 };
 
-function Badge({ variant, label, className }: { variant: StatusVariant; label: string; className?: string }) {
+const pulseRing: Record<StatusVariant, string> = {
+  success: "shadow-[0_0_0_0_hsl(var(--success))] animate-status-pulse-success",
+  danger:  "shadow-[0_0_0_0_hsl(var(--danger))] animate-status-pulse-danger",
+  warning: "shadow-[0_0_0_0_hsl(var(--warning))] animate-status-pulse-warning",
+  neutral: "",
+  info:    "",
+};
+
+function Badge({ variant, label, pulse = false, className }: { variant: StatusVariant; label: string; pulse?: boolean; className?: string }) {
   return (
     <span className={cn("inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-medium", variantStyles[variant], className)}>
-      <span className={cn("h-1.5 w-1.5 rounded-full", dotColors[variant])} />
+      <span className={cn("h-1.5 w-1.5 rounded-full", dotColors[variant], pulse && pulseRing[variant])} />
       {label}
     </span>
   );
@@ -32,16 +40,18 @@ function Badge({ variant, label, className }: { variant: StatusVariant; label: s
 const statusMap: Record<string, StatusVariant> = {
   UP: "success", ONLINE: "success", HEALTHY: "success", active: "success", resolved: "success",
   DOWN: "danger", OFFLINE: "danger", UNHEALTHY: "danger", inactive: "danger",
-  DEGRADED: "warning", MAINTENANCE: "warning", acknowledged: "warning", triggered: "danger",
+  DEGRADED: "warning", SLOW: "warning", MAINTENANCE: "warning", acknowledged: "warning", triggered: "danger",
   UNKNOWN: "neutral",
 };
 
-export function StatusBadge({ status }: { status: string }) {
-  return <Badge variant={statusMap[status] || "neutral"} label={status} />;
+export function StatusBadge({ status, pulse = true }: { status: string; pulse?: boolean }) {
+  const variant = statusMap[status] || "neutral";
+  return <Badge variant={variant} label={status} pulse={pulse && variant !== "neutral"} />;
 }
 
-export function HostStatusBadge({ status }: { status: string }) {
-  return <Badge variant={statusMap[status] || "neutral"} label={status} />;
+export function HostStatusBadge({ status, pulse = true }: { status: string; pulse?: boolean }) {
+  const variant = statusMap[status] || "neutral";
+  return <Badge variant={variant} label={status} pulse={pulse && variant !== "neutral"} />;
 }
 
 const severityMap: Record<string, StatusVariant> = {

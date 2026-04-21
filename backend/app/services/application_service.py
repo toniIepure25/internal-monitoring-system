@@ -7,6 +7,7 @@ from sqlalchemy.orm import selectinload
 
 from app.models.application import Application, DetectionSource
 from app.models.application_status import ApplicationStatus, AppState
+from app.models.health_check import HealthCheck
 from app.utils.url import normalize_url
 from app.utils.logging import get_logger
 
@@ -158,3 +159,15 @@ async def set_health_url(
     await db.flush()
     logger.info("health_url_set", app_id=str(app_id), health_url=health_url)
     return app
+
+
+async def get_health_history(
+    db: AsyncSession, app_id: UUID, limit: int = 30,
+) -> list[HealthCheck]:
+    result = await db.execute(
+        select(HealthCheck)
+        .where(HealthCheck.application_id == app_id)
+        .order_by(HealthCheck.checked_at.desc())
+        .limit(limit)
+    )
+    return list(result.scalars().all())

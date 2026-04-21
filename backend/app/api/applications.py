@@ -209,6 +209,27 @@ async def delete_application(app_id: UUID, db: DbSession, current_user: CurrentU
     remove_monitoring_job(str(app_id))
 
 
+@router.get("/{app_id}/health-history")
+async def get_health_history(
+    app_id: UUID, db: DbSession, current_user: CurrentUser,
+    limit: int = Query(30, ge=1, le=100),
+):
+    checks = await application_service.get_health_history(db, app_id, limit=limit)
+    return {
+        "items": [
+            {
+                "id": str(c.id),
+                "status": c.status.value if hasattr(c.status, "value") else c.status,
+                "http_status": c.http_status,
+                "response_time_ms": c.response_time_ms,
+                "error_message": c.error_message,
+                "checked_at": c.checked_at.isoformat() if c.checked_at else None,
+            }
+            for c in checks
+        ]
+    }
+
+
 @router.post("/{app_id}/rediscover", status_code=status.HTTP_202_ACCEPTED)
 async def rediscover(
     app_id: UUID, db: DbSession, current_user: CurrentUser, background_tasks: BackgroundTasks,

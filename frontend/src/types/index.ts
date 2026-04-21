@@ -166,6 +166,15 @@ export interface UserGroup {
   applications?: Application[];
 }
 
+export interface HealthCheckEntry {
+  id: string;
+  status: AppState;
+  http_status: number | null;
+  response_time_ms: number | null;
+  error_message: string | null;
+  checked_at: string | null;
+}
+
 export interface AuthTokens {
   access_token: string;
   refresh_token: string;

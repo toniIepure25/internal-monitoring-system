@@ -11,9 +11,10 @@ import { StatCard } from "@/components/ui/stat-card";
 import { CardGridSkeleton } from "@/components/ui/loading-skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageTransition, SectionStagger, SectionItem } from "@/components/ui/motion";
+import { ResponseSparkline } from "@/components/ui/response-sparkline";
 import { api } from "@/lib/api";
 import { formatDate } from "@/lib/utils";
-import type { UserGroup, Application, Incident, Host } from "@/types";
+import type { UserGroup, Application, Incident, Host, HealthCheckEntry } from "@/types";
 
 export default function DashboardPage() {
   const [groups, setGroups] = useState<UserGroup[]>([]);
@@ -21,6 +22,7 @@ export default function DashboardPage() {
   const [apps, setApps] = useState<Application[]>([]);
   const [hosts, setHosts] = useState<Host[]>([]);
   const [subscriptionCount, setSubscriptionCount] = useState(0);
+  const [healthHistory, setHealthHistory] = useState<Record<string, HealthCheckEntry[]>>({});
   const [loading, setLoading] = useState(true);
   const router = useRouter();
 
@@ -39,6 +41,16 @@ export default function DashboardPage() {
         setApps(appsRes.items);
         setHosts(hostsRes.items);
         setSubscriptionCount(subsRes.total || subsRes.items.length);
+
+        const visible = appsRes.items.slice(0, 8);
+        const historyResults = await Promise.all(
+          visible.map((a) =>
+            api.get<{ items: HealthCheckEntry[] }>(`/api/applications/${a.id}/health-history?limit=30`).catch(() => ({ items: [] }))
+          )
+        );
+        const historyMap: Record<string, HealthCheckEntry[]> = {};
+        visible.forEach((a, i) => { historyMap[a.id] = historyResults[i].items; });
+        setHealthHistory(historyMap);
       } catch { /* partial */ }
       setLoading(false);
     }
@@ -115,6 +127,7 @@ export default function DashboardPage() {
                             <p className="truncate text-[11px] text-fgSubtle">{app.base_url}</p>
                           </div>
                           <div className="flex shrink-0 items-center gap-2">
+                            {healthHistory[app.id]?.length > 1 && <ResponseSparkline checks={healthHistory[app.id]} width={80} height={24} />}
                             {app.status?.last_response_time_ms != null && <span className="text-[11px] tabular-nums text-fgSubtle">{app.status.last_response_time_ms}ms</span>}
                             <StatusBadge status={app.status?.status || "UNKNOWN"} />
                           </div>
