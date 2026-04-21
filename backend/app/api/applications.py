@@ -352,6 +352,30 @@ async def get_container_logs(
 
 # ── GitHub Workflow Redeploy ─────────────────────────────────────────────────
 
+@router.get("/{app_id}/detect-repo")
+async def detect_repo(
+    app_id: UUID,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    app = await application_service.get_application(db, app_id)
+    if not app:
+        raise HTTPException(status_code=404, detail="Application not found")
+
+    result = await github_service.detect_repo(app.base_url)
+
+    if result.best and not app.github_repo:
+        app.github_repo = result.best
+        await db.flush()
+
+    return {
+        "best": result.best,
+        "matches": [{"name": m.name, "url": m.url, "score": m.score} for m in result.matches],
+        "current": app.github_repo,
+        "error": result.error,
+    }
+
+
 @router.post("/{app_id}/redeploy", status_code=status.HTTP_202_ACCEPTED)
 async def trigger_redeploy(
     app_id: UUID,

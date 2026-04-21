@@ -39,6 +39,9 @@ export default function ApplicationDetailPage() {
   const [repoDraft, setRepoDraft] = useState("");
   const [savingRepo, setSavingRepo] = useState(false);
   const [showDeployConfirm, setShowDeployConfirm] = useState(false);
+  const [repoDetecting, setRepoDetecting] = useState(false);
+  const [repoSuggestions, setRepoSuggestions] = useState<{ name: string; url: string; score: number }[]>([]);
+  const [repoDetected, setRepoDetected] = useState(false);
 
   // Container logs state
   const [logTab, setLogTab] = useState<"backend" | "frontend">("backend");
@@ -217,6 +220,34 @@ export default function ApplicationDetailPage() {
     } catch (err: unknown) { toast.error(err instanceof Error ? err.message : "Failed"); }
   };
 
+  const handleDetectRepo = async () => {
+    if (!app) return;
+    setRepoDetecting(true);
+    setRepoSuggestions([]);
+    try {
+      const res = await api.get<{ best: string | null; matches: { name: string; url: string; score: number }[]; current: string | null; error: string | null }>(`/api/applications/${app.id}/detect-repo`);
+      setRepoSuggestions(res.matches);
+      if (res.best) {
+        setRepoDraft(res.best);
+        await reload();
+        if (!showRepoSetup) {
+          toast.success(`Linked repo: ${res.best}`);
+        }
+      } else if (res.matches.length > 0) {
+        setRepoDraft(res.matches[0].name);
+        if (!showRepoSetup) {
+          setShowRepoSetup(true);
+        }
+      } else if (!showRepoSetup) {
+        setShowRepoSetup(true);
+        toast.info("No matching repo found — enter it manually");
+      }
+      if (res.error) toast.error(res.error);
+    } catch (err: unknown) { toast.error(err instanceof Error ? err.message : "Detection failed"); }
+    setRepoDetecting(false);
+    setRepoDetected(true);
+  };
+
   const handleSaveRepo = async () => {
     if (!app || !repoDraft.trim()) return;
     setSavingRepo(true);
@@ -225,7 +256,6 @@ export default function ApplicationDetailPage() {
       toast.success("GitHub repo saved");
       setShowRepoSetup(false);
       await reload();
-      setShowDeployConfirm(true);
     } catch (err: unknown) { toast.error(err instanceof Error ? err.message : "Failed to save"); }
     setSavingRepo(false);
   };
@@ -299,23 +329,47 @@ export default function ApplicationDetailPage() {
         {/* Repo setup dialog */}
         {showRepoSetup && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setShowRepoSetup(false)}>
-            <div className="mx-4 w-full max-w-sm rounded-lg bg-surface p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <div className="mx-4 w-full max-w-md rounded-lg bg-surface p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
               <h3 className="text-sm font-semibold text-fg">Set GitHub Repository</h3>
               <p className="mt-2 text-[13px] text-fgMuted">
-                Enter the GitHub repo name (just the repo, not the full URL). The org is configured server-side.
+                Enter the repo name or auto-detect it from the org.
               </p>
-              <input
-                type="text"
-                placeholder="e.g. quiktrip"
-                value={repoDraft}
-                onChange={(e) => setRepoDraft(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleSaveRepo()}
-                className="mt-3 w-full rounded border border-border bg-canvas px-3 py-2 text-sm text-fg placeholder:text-fgSubtle outline-none focus:border-accent"
-                autoFocus
-              />
+              <div className="mt-3 flex gap-2">
+                <input
+                  type="text"
+                  placeholder="e.g. quiktrip"
+                  value={repoDraft}
+                  onChange={(e) => setRepoDraft(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleSaveRepo()}
+                  className="flex-1 rounded border border-border bg-canvas px-3 py-2 text-sm text-fg placeholder:text-fgSubtle outline-none focus:border-accent"
+                  autoFocus
+                />
+                <Button variant="secondary" onClick={handleDetectRepo} disabled={repoDetecting}>
+                  {repoDetecting ? "Searching…" : "Auto-detect"}
+                </Button>
+              </div>
+              {repoSuggestions.length > 0 && (
+                <div className="mt-3 max-h-36 space-y-1 overflow-y-auto">
+                  <p className="text-[10px] font-medium uppercase tracking-wider text-fgSubtle">Matches found</p>
+                  {repoSuggestions.map((s) => (
+                    <button
+                      key={s.name}
+                      type="button"
+                      onClick={() => setRepoDraft(s.name)}
+                      className={`flex w-full items-center justify-between rounded px-2.5 py-1.5 text-left transition-colors ${repoDraft === s.name ? "bg-accent/10 ring-1 ring-accent" : "hover:bg-surfaceRaised"}`}
+                    >
+                      <span className="font-mono text-[12px] text-fg">{s.name}</span>
+                      <span className={`text-[10px] font-semibold tabular-nums ${s.score >= 70 ? "text-success" : s.score >= 40 ? "text-warning" : "text-fgSubtle"}`}>{s.score}%</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+              {repoDetected && repoSuggestions.length === 0 && !repoDetecting && (
+                <p className="mt-2 text-[11px] text-fgSubtle">No matching repos found. Enter the name manually.</p>
+              )}
               <div className="mt-4 flex justify-end gap-2">
                 <Button variant="secondary" onClick={() => setShowRepoSetup(false)}>Cancel</Button>
-                <Button onClick={handleSaveRepo} disabled={!repoDraft.trim() || savingRepo}>{savingRepo ? "Saving…" : "Save & Deploy"}</Button>
+                <Button onClick={handleSaveRepo} disabled={!repoDraft.trim() || savingRepo}>{savingRepo ? "Saving…" : "Save"}</Button>
               </div>
             </div>
           </div>
@@ -736,14 +790,22 @@ export default function ApplicationDetailPage() {
                     </div>
                   </div>
                 ) : (
-                  <div className="text-center">
-                    <p className="text-[11px] text-fgSubtle">No GitHub repo linked to this app yet.</p>
+                  <div className="space-y-2 text-center">
+                    <p className="text-[11px] text-fgSubtle">No GitHub repo linked yet.</p>
+                    <Button
+                      size="xs"
+                      className="w-full"
+                      onClick={handleDetectRepo}
+                      disabled={repoDetecting}
+                    >
+                      {repoDetecting ? "Searching org…" : "Auto-detect repo"}
+                    </Button>
                     <button
                       type="button"
-                      onClick={() => { setRepoDraft(""); setShowRepoSetup(true); }}
-                      className="mt-2 text-[11px] font-medium text-accent hover:underline"
+                      onClick={() => { setRepoDraft(""); setRepoSuggestions([]); setRepoDetected(false); setShowRepoSetup(true); }}
+                      className="text-[10px] text-fgSubtle hover:text-accent"
                     >
-                      Set up deployment
+                      or set manually
                     </button>
                   </div>
                 )}
