@@ -115,7 +115,7 @@ export default function ApplicationDetailPage() {
                     ["Last checked", app.status?.last_checked_at ? formatDate(app.status.last_checked_at) : "Never"],
                     ["Response", app.status?.last_response_time_ms != null ? `${app.status.last_response_time_ms}ms` : "—"],
                     ["HTTP status", app.status?.last_http_status || "—"],
-                    ["In current state", app.status?.current_state_since ? formatDuration(app.status.current_state_since) : "—"],
+                    [app.status?.status === "UP" ? "Uptime" : app.status?.status === "DOWN" ? "Down for" : "In state for", app.status?.current_state_since ? formatDuration(app.status.current_state_since) : "—"],
                     ["Created", formatDate(app.created_at)],
                   ].map(([label, value]) => (
                     <div key={label as string}>

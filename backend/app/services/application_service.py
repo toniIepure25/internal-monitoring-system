@@ -173,23 +173,18 @@ async def get_state_since_map(
     if not app_ids:
         return {}
 
-    from sqlalchemy.sql import text
-
-    # Lateral / DISTINCT ON is Postgres-specific but we're on Postgres
-    result = await db.execute(
-        text(
-            """
-            SELECT DISTINCT ON (application_id)
-                   application_id, started_at
-              FROM incidents
-             WHERE application_id = ANY(:ids)
-             ORDER BY application_id, started_at DESC
-            """
-        ),
-        {"ids": app_ids},
-    )
-    rows = result.fetchall()
-    return {row[0]: row[1].isoformat() for row in rows}
+    result_map: dict[UUID, str] = {}
+    for aid in app_ids:
+        result = await db.execute(
+            select(Incident.started_at)
+            .where(Incident.application_id == aid)
+            .order_by(Incident.started_at.desc())
+            .limit(1)
+        )
+        row = result.scalar_one_or_none()
+        if row is not None:
+            result_map[aid] = row.isoformat()
+    return result_map
 
 
 async def get_health_history(

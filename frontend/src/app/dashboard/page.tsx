@@ -124,16 +124,14 @@ export default function DashboardPage() {
                         <Link key={app.id} href={`/applications/${app.id}`} className="flex items-center justify-between gap-3 px-4 py-2.5 transition-colors hover:bg-surfaceRaised/40">
                           <div className="min-w-0">
                             <p className="truncate text-[13px] font-medium text-fg">{app.display_name}</p>
-                            <p className="truncate text-[11px] text-fgSubtle">
-                              {app.base_url}
-                              {app.status?.current_state_since && (
-                                <span className="ml-2 text-fgMuted">· {app.status.status === "UP" ? "up" : app.status.status === "DOWN" ? "down" : app.status.status.toLowerCase()} for {formatDuration(app.status.current_state_since)}</span>
-                              )}
-                            </p>
+                            <p className="truncate text-[11px] text-fgSubtle">{app.base_url}</p>
                           </div>
                           <div className="flex shrink-0 items-center gap-2">
                             {healthHistory[app.id]?.length > 1 && <ResponseSparkline checks={healthHistory[app.id]} width={80} height={24} />}
                             {app.status?.last_response_time_ms != null && <span className="text-[11px] tabular-nums text-fgSubtle">{app.status.last_response_time_ms}ms</span>}
+                            {app.status?.current_state_since && (
+                              <span className="text-[11px] tabular-nums text-fgMuted">{formatDuration(app.status.current_state_since)}</span>
+                            )}
                             <StatusBadge status={app.status?.status || "UNKNOWN"} />
                           </div>
                         </Link>
