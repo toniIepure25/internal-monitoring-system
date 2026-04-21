@@ -3,10 +3,10 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { CubeTransparentIcon, ServerIcon, ExclamationTriangleIcon, SparklesIcon } from "@heroicons/react/24/outline";
+import { CubeTransparentIcon, ExclamationTriangleIcon, SparklesIcon } from "@heroicons/react/24/outline";
 import { AppShell } from "@/components/layout/app-shell";
 import { PageHeader } from "@/components/ui/page-header";
-import { StatusBadge, HostStatusBadge, IncidentTypeBadge, SeverityBadge } from "@/components/ui/status-badge";
+import { StatusBadge, HostStatusBadge, SeverityBadge } from "@/components/ui/status-badge";
 import { StatCard } from "@/components/ui/stat-card";
 import { CardGridSkeleton } from "@/components/ui/loading-skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -61,8 +61,6 @@ export default function DashboardPage() {
 
   const appsUp = apps.filter((a) => a.status?.status === "UP").length;
   const appsDown = apps.filter((a) => a.status?.status === "DOWN").length;
-  const hostsOnline = hosts.filter((h) => h.status?.status === "ONLINE").length;
-  const hostsOffline = hosts.filter((h) => h.status?.status === "OFFLINE").length;
   const activeIncidents = recentIncidents.filter((i) => i.status === "ONGOING").length;
 
   return (
@@ -75,11 +73,10 @@ export default function DashboardPage() {
         ) : (
           <SectionStagger className="mt-5 space-y-6">
             {/* Metrics */}
-            <SectionItem className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+            <SectionItem className="grid grid-cols-3 gap-3">
               <StatCard icon={CubeTransparentIcon} label="Applications" value={apps.length} subtext={`${appsUp} up · ${appsDown} down`} color={appsDown > 0 ? "red" : "green"} delay={0} />
-              <StatCard icon={ServerIcon} label="Hosts" value={hosts.length} subtext={`${hostsOnline} online · ${hostsOffline} offline`} color={hostsOffline > 0 ? "red" : hosts.length > 0 ? "green" : "gray"} delay={0.04} />
-              <StatCard icon={ExclamationTriangleIcon} label="Active incidents" value={activeIncidents} subtext={activeIncidents > 0 ? "Requires attention" : "All clear"} color={activeIncidents > 0 ? "red" : "green"} delay={0.08} />
-              <StatCard icon={SparklesIcon} label="Subscriptions" value={subscriptionCount} subtext="Notification-enabled" color="cyan" delay={0.12} />
+              <StatCard icon={ExclamationTriangleIcon} label="Active incidents" value={activeIncidents} subtext={activeIncidents > 0 ? "Requires attention" : "All clear"} color={activeIncidents > 0 ? "red" : "green"} delay={0.04} />
+              <StatCard icon={SparklesIcon} label="Subscriptions" value={subscriptionCount} subtext="Notification-enabled" color="gray" delay={0.08} />
             </SectionItem>
 
             {/* Two-column body */}

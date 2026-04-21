@@ -15,16 +15,16 @@ interface StatCardProps {
   delay?: number;
 }
 
-const accents: Record<Color, string> = {
+const subtleAccents: Record<Color, string> = {
   gray:   "text-fgSubtle",
-  green:  "text-success",
-  red:    "text-danger",
-  yellow: "text-warning",
-  blue:   "text-accent",
-  cyan:   "text-info",
+  green:  "text-success/70",
+  red:    "text-danger/70",
+  yellow: "text-warning/70",
+  blue:   "text-accent/70",
+  cyan:   "text-info/70",
 };
 
-const bars: Record<Color, string> = {
+const dotColors: Record<Color, string> = {
   gray:   "bg-fgSubtle",
   green:  "bg-success",
   red:    "bg-danger",
@@ -39,23 +39,20 @@ export function StatCard({ icon: Icon, label, value, subtext, color = "blue", de
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 10 }}
+      initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3, delay, ease: [0.25, 0.1, 0.25, 1] as [number, number, number, number] }}
-      whileHover={{ y: -2, transition: { duration: 0.2 } }}
-      className="relative overflow-hidden rounded-lg border border-border bg-surface px-4 py-3.5 transition-shadow duration-200 hover:shadow-lg hover:shadow-black/5"
+      transition={{ duration: 0.25, delay, ease: [0.25, 0.1, 0.25, 1] as [number, number, number, number] }}
+      className="rounded-lg border border-border/60 bg-surface px-4 py-3"
     >
-      <div className={cn("absolute inset-y-0 left-0 w-[2px]", bars[color])} />
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-2xs font-medium uppercase tracking-wider text-fgSubtle">{label}</p>
-          <p className={cn("mt-1 text-2xl font-semibold tabular-nums tracking-tight", accents[color])}>
-            {isNumeric ? <AnimatedNumber value={numericValue} /> : value}
-          </p>
-          {subtext && <p className="mt-0.5 text-xs text-fgMuted">{subtext}</p>}
-        </div>
-        {Icon && <Icon className={cn("mt-0.5 h-4 w-4 shrink-0", accents[color])} />}
+      <div className="flex items-center gap-2">
+        <span className={cn("h-1.5 w-1.5 rounded-full", dotColors[color])} />
+        <p className="text-[11px] font-medium uppercase tracking-wider text-fgSubtle">{label}</p>
+        {Icon && <Icon className="ml-auto h-3.5 w-3.5 text-fgSubtle/50" />}
       </div>
+      <p className="mt-1.5 text-lg font-semibold tabular-nums tracking-tight text-fg">
+        {isNumeric ? <AnimatedNumber value={numericValue} /> : value}
+      </p>
+      {subtext && <p className={cn("mt-0.5 text-[11px]", subtleAccents[color])}>{subtext}</p>}
     </motion.div>
   );
 }
