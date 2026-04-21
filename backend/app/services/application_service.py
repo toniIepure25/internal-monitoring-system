@@ -136,7 +136,10 @@ async def update_application(
 
     for key, value in kwargs.items():
         if value is not None and hasattr(app, key):
-            setattr(app, key, value)
+            if key == "github_repo" and value == "":
+                setattr(app, key, None)
+            else:
+                setattr(app, key, value)
 
     await db.flush()
     return app

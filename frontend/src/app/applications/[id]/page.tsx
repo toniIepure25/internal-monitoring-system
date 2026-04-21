@@ -41,7 +41,9 @@ export default function ApplicationDetailPage() {
   const [showDeployConfirm, setShowDeployConfirm] = useState(false);
   const [repoDetecting, setRepoDetecting] = useState(false);
   const [repoSuggestions, setRepoSuggestions] = useState<{ name: string; url: string; score: number }[]>([]);
+  const [allOrgRepos, setAllOrgRepos] = useState<{ name: string; url: string }[]>([]);
   const [repoDetected, setRepoDetected] = useState(false);
+  const [repoSearch, setRepoSearch] = useState("");
 
   // Container logs state
   const [logTab, setLogTab] = useState<"backend" | "frontend">("backend");
@@ -224,23 +226,25 @@ export default function ApplicationDetailPage() {
     if (!app) return;
     setRepoDetecting(true);
     setRepoSuggestions([]);
+    setAllOrgRepos([]);
+    setRepoSearch("");
     try {
-      const res = await api.get<{ best: string | null; matches: { name: string; url: string; score: number }[]; current: string | null; error: string | null }>(`/api/applications/${app.id}/detect-repo`);
+      const res = await api.get<{ best: string | null; matches: { name: string; url: string; score: number }[]; all_repos: { name: string; url: string }[]; current: string | null; error: string | null }>(`/api/applications/${app.id}/detect-repo`);
       setRepoSuggestions(res.matches);
+      setAllOrgRepos(res.all_repos || []);
       if (res.best) {
         setRepoDraft(res.best);
         await reload();
         if (!showRepoSetup) {
           toast.success(`Linked repo: ${res.best}`);
         }
-      } else if (res.matches.length > 0) {
-        setRepoDraft(res.matches[0].name);
-        if (!showRepoSetup) {
-          setShowRepoSetup(true);
+      } else {
+        if (!showRepoSetup) setShowRepoSetup(true);
+        if (res.matches.length > 0) {
+          setRepoDraft(res.matches[0].name);
+        } else {
+          toast.info("No confident match — pick from the list or type manually");
         }
-      } else if (!showRepoSetup) {
-        setShowRepoSetup(true);
-        toast.info("No matching repo found — enter it manually");
       }
       if (res.error) toast.error(res.error);
     } catch (err: unknown) { toast.error(err instanceof Error ? err.message : "Detection failed"); }
@@ -349,23 +353,48 @@ export default function ApplicationDetailPage() {
                 </Button>
               </div>
               {repoSuggestions.length > 0 && (
-                <div className="mt-3 max-h-36 space-y-1 overflow-y-auto">
-                  <p className="text-[10px] font-medium uppercase tracking-wider text-fgSubtle">Matches found</p>
-                  {repoSuggestions.map((s) => (
-                    <button
-                      key={s.name}
-                      type="button"
-                      onClick={() => setRepoDraft(s.name)}
-                      className={`flex w-full items-center justify-between rounded px-2.5 py-1.5 text-left transition-colors ${repoDraft === s.name ? "bg-accent/10 ring-1 ring-accent" : "hover:bg-surfaceRaised"}`}
-                    >
-                      <span className="font-mono text-[12px] text-fg">{s.name}</span>
-                      <span className={`text-[10px] font-semibold tabular-nums ${s.score >= 70 ? "text-success" : s.score >= 40 ? "text-warning" : "text-fgSubtle"}`}>{s.score}%</span>
-                    </button>
-                  ))}
+                <div className="mt-3 space-y-1">
+                  <p className="text-[10px] font-medium uppercase tracking-wider text-fgSubtle">Best matches</p>
+                  <div className="max-h-32 space-y-1 overflow-y-auto">
+                    {repoSuggestions.map((s) => (
+                      <button
+                        key={s.name}
+                        type="button"
+                        onClick={() => setRepoDraft(s.name)}
+                        className={`flex w-full items-center justify-between rounded px-2.5 py-1.5 text-left transition-colors ${repoDraft === s.name ? "bg-accent/10 ring-1 ring-accent" : "hover:bg-surfaceRaised"}`}
+                      >
+                        <span className="font-mono text-[12px] text-fg">{s.name}</span>
+                        <span className={`text-[10px] font-semibold tabular-nums ${s.score >= 70 ? "text-success" : s.score >= 40 ? "text-warning" : "text-fgSubtle"}`}>{s.score}%</span>
+                      </button>
+                    ))}
+                  </div>
                 </div>
               )}
-              {repoDetected && repoSuggestions.length === 0 && !repoDetecting && (
-                <p className="mt-2 text-[11px] text-fgSubtle">No matching repos found. Enter the name manually.</p>
+              {repoDetected && allOrgRepos.length > 0 && (
+                <div className="mt-3 space-y-1">
+                  <p className="text-[10px] font-medium uppercase tracking-wider text-fgSubtle">All org repos ({allOrgRepos.length})</p>
+                  <input
+                    type="text"
+                    placeholder="Search repos…"
+                    value={repoSearch}
+                    onChange={(e) => setRepoSearch(e.target.value)}
+                    className="w-full rounded border border-border bg-canvas px-2 py-1.5 text-[11px] text-fg placeholder:text-fgSubtle outline-none focus:border-accent"
+                  />
+                  <div className="max-h-40 space-y-0.5 overflow-y-auto">
+                    {allOrgRepos
+                      .filter((r) => !repoSearch || r.name.toLowerCase().includes(repoSearch.toLowerCase()))
+                      .map((r) => (
+                        <button
+                          key={r.name}
+                          type="button"
+                          onClick={() => { setRepoDraft(r.name); setRepoSearch(""); }}
+                          className={`flex w-full items-center rounded px-2.5 py-1.5 text-left transition-colors ${repoDraft === r.name ? "bg-accent/10 ring-1 ring-accent" : "hover:bg-surfaceRaised"}`}
+                        >
+                          <span className="font-mono text-[12px] text-fg">{r.name}</span>
+                        </button>
+                      ))}
+                  </div>
+                </div>
               )}
               <div className="mt-4 flex justify-end gap-2">
                 <Button variant="secondary" onClick={() => setShowRepoSetup(false)}>Cancel</Button>
@@ -749,7 +778,20 @@ export default function ApplicationDetailPage() {
               <CardHeader>
                 <CardTitle>Deployment</CardTitle>
                 {app.github_repo && (
-                  <button type="button" onClick={() => { setRepoDraft(app.github_repo || ""); setShowRepoSetup(true); }} className="text-[11px] font-medium text-accent hover:underline">Edit</button>
+                  <div className="flex gap-2">
+                    <button type="button" onClick={() => { setRepoDraft(app.github_repo || ""); setRepoSuggestions([]); setAllOrgRepos([]); setRepoDetected(false); setRepoSearch(""); setShowRepoSetup(true); }} className="text-[11px] font-medium text-accent hover:underline">Change</button>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        try {
+                          await api.patch(`/api/applications/${app.id}`, { github_repo: "" });
+                          toast.success("Repo unlinked");
+                          await reload();
+                        } catch { toast.error("Failed to unlink"); }
+                      }}
+                      className="text-[11px] font-medium text-danger hover:underline"
+                    >Unlink</button>
+                  </div>
                 )}
               </CardHeader>
               <CardContent>

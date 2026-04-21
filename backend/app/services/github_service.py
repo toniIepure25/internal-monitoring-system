@@ -38,20 +38,17 @@ class RepoMatch:
 class RepoDetectionResult:
     matches: list[RepoMatch] = field(default_factory=list)
     best: str | None = None
+    all_repos: list[RepoMatch] = field(default_factory=list)
     error: str | None = None
 
 
-async def detect_repo(base_url: str) -> RepoDetectionResult:
-    """Search the org's repos for one matching the app's URL slug."""
+async def _fetch_org_repos() -> tuple[list[dict], str | None]:
+    """Fetch all repos from the configured org. Returns (repos, error)."""
     token = settings.GITHUB_TOKEN
     org = settings.GITHUB_ORG
 
     if not token:
-        return RepoDetectionResult(error="GitHub token not configured")
-
-    slug = _slug_from_url(base_url)
-    if not slug:
-        return RepoDetectionResult(error="Could not derive slug from URL")
+        return [], "GitHub token not configured"
 
     headers = {
         "Authorization": f"Bearer {token}",
@@ -59,57 +56,119 @@ async def detect_repo(base_url: str) -> RepoDetectionResult:
         "X-GitHub-Api-Version": "2022-11-28",
     }
 
-    try:
-        all_repos: list[dict] = []
-        page = 1
-        async with httpx.AsyncClient() as client:
-            while True:
-                resp = await client.get(
-                    f"{GITHUB_API}/orgs/{org}/repos",
-                    params={"per_page": 100, "page": page, "type": "all"},
-                    headers=headers,
-                    timeout=15,
-                )
-                if resp.status_code != 200:
-                    return RepoDetectionResult(
-                        error=f"GitHub API returned {resp.status_code}"
-                    )
-                batch = resp.json()
-                if not batch:
-                    break
-                all_repos.extend(batch)
-                if len(batch) < 100:
-                    break
-                page += 1
+    all_repos: list[dict] = []
+    page = 1
+    async with httpx.AsyncClient() as client:
+        while True:
+            resp = await client.get(
+                f"{GITHUB_API}/orgs/{org}/repos",
+                params={"per_page": 100, "page": page, "type": "all"},
+                headers=headers,
+                timeout=15,
+            )
+            if resp.status_code != 200:
+                return [], f"GitHub API returned {resp.status_code}"
+            batch = resp.json()
+            if not batch:
+                break
+            all_repos.extend(batch)
+            if len(batch) < 100:
+                break
+            page += 1
 
-        slug_parts = set(slug.split("-"))
-        matches: list[RepoMatch] = []
+    return all_repos, None
+
+
+def _normalize(text: str) -> str:
+    """Lowercase, strip common suffixes, collapse separators."""
+    t = text.lower().strip()
+    for suffix in ("-vm", "-poc", "-app", "-demo", "-chatbot", "-chat"):
+        if t.endswith(suffix):
+            t = t[: -len(suffix)]
+    return re.sub(r"[-_ ]+", "", t)
+
+
+def _score_repo(repo_name: str, slug: str, display_name: str) -> float:
+    """Score a repo name against both the URL slug and display name."""
+    name_lower = repo_name.lower()
+    norm_repo = _normalize(repo_name)
+    norm_slug = _normalize(slug)
+    norm_display = _normalize(display_name)
+
+    # Exact match on slug
+    if name_lower == slug:
+        return 100.0
+
+    # Normalized exact match
+    if norm_repo == norm_slug or norm_repo == norm_display:
+        return 95.0
+
+    best = 0.0
+
+    # Substring containment (either direction)
+    for term in [slug, _normalize(slug)]:
+        if term in name_lower or name_lower in term:
+            best = max(best, 75.0)
+        if term in norm_repo or norm_repo in term:
+            best = max(best, 70.0)
+
+    # Display name containment
+    if norm_display and (norm_display in norm_repo or norm_repo in norm_display):
+        best = max(best, 65.0)
+
+    # Word-part overlap (slug parts vs repo parts)
+    slug_parts = set(slug.split("-"))
+    display_parts = set(re.sub(r"[^a-z0-9]+", " ", display_name.lower()).split())
+    repo_parts = set(name_lower.split("-"))
+
+    for search_parts, base_score in [(slug_parts, 50.0), (display_parts, 40.0)]:
+        if not search_parts:
+            continue
+        overlap = search_parts & repo_parts
+        if overlap:
+            ratio = len(overlap) / max(len(search_parts), len(repo_parts))
+            best = max(best, base_score + ratio * 30)
+
+    return round(best, 1)
+
+
+async def detect_repo(base_url: str, display_name: str = "") -> RepoDetectionResult:
+    """Search the org's repos for one matching the app's URL slug or display name."""
+    slug = _slug_from_url(base_url)
+    if not slug:
+        return RepoDetectionResult(error="Could not derive slug from URL")
+
+    try:
+        all_repos, error = await _fetch_org_repos()
+        if error:
+            return RepoDetectionResult(error=error)
+
+        scored: list[RepoMatch] = []
+        all_repo_list: list[RepoMatch] = []
 
         for repo in all_repos:
-            name = repo["name"].lower()
-            score = 0.0
+            rm = RepoMatch(
+                name=repo["name"],
+                url=repo["html_url"],
+                score=0.0,
+            )
+            all_repo_list.append(RepoMatch(name=repo["name"], url=repo["html_url"], score=0.0))
 
-            if name == slug:
-                score = 100.0
-            elif slug in name or name in slug:
-                score = 70.0
-            else:
-                repo_parts = set(name.split("-"))
-                overlap = slug_parts & repo_parts
-                if overlap and len(overlap) >= len(slug_parts) * 0.5:
-                    score = 40.0 + (len(overlap) / max(len(slug_parts), len(repo_parts))) * 30
-
+            score = _score_repo(repo["name"], slug, display_name)
             if score > 0:
-                matches.append(RepoMatch(
-                    name=repo["name"],
-                    url=repo["html_url"],
-                    score=round(score, 1),
-                ))
+                rm.score = score
+                scored.append(rm)
 
-        matches.sort(key=lambda m: m.score, reverse=True)
-        best = matches[0].name if matches and matches[0].score >= 40 else None
+        scored.sort(key=lambda m: m.score, reverse=True)
+        all_repo_list.sort(key=lambda m: m.name.lower())
 
-        return RepoDetectionResult(matches=matches[:5], best=best)
+        best = scored[0].name if scored and scored[0].score >= 50 else None
+
+        return RepoDetectionResult(
+            matches=scored[:8],
+            best=best,
+            all_repos=all_repo_list,
+        )
 
     except Exception as e:
         logger.error("detect_repo_error", slug=slug, error=str(e))

@@ -362,7 +362,7 @@ async def detect_repo(
     if not app:
         raise HTTPException(status_code=404, detail="Application not found")
 
-    result = await github_service.detect_repo(app.base_url)
+    result = await github_service.detect_repo(app.base_url, app.display_name)
 
     if result.best and not app.github_repo:
         app.github_repo = result.best
@@ -371,6 +371,7 @@ async def detect_repo(
     return {
         "best": result.best,
         "matches": [{"name": m.name, "url": m.url, "score": m.score} for m in result.matches],
+        "all_repos": [{"name": m.name, "url": m.url} for m in result.all_repos],
         "current": app.github_repo,
         "error": result.error,
     }
