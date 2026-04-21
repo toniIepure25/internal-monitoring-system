@@ -29,8 +29,11 @@ class Settings(BaseSettings):
     # Logging
     LOG_LEVEL: str = "INFO"
 
-    # VM / Container access
-    VM_EXEC_PREFIX: str = "multipass exec ubuntu-vm --"
+    # VM / Container access (SSH to the VM where app containers run)
+    VM_SSH_HOST: str = "192.168.64.11"
+    VM_SSH_USER: str = "ubuntu"
+    VM_SSH_PORT: int = 22
+    VM_SSH_KEY_PATH: str = ""
 
     # Monitoring
     MONITORING_ENABLED: bool = True

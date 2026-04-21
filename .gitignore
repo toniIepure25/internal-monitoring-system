@@ -1,5 +1,7 @@
 # Environment and secrets
 .env
+vm_ssh_key
+vm_ssh_key.pub
 .env.local
 .env.*.local
 !.env.example

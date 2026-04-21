@@ -36,6 +36,7 @@ services:
       - "8090:8090"
     volumes:
       - ./backend:/app
+      - ./vm_ssh_key:/root/.ssh/vm_key:ro
     depends_on:
       postgres:
         condition: service_healthy

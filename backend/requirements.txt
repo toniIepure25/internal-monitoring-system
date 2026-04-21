@@ -30,6 +30,9 @@ pywebpush==2.0.1
 py-vapid==1.9.2
 aiosmtplib==3.0.2
 
+# SSH (VM container access)
+asyncssh==2.17.0
+
 # Logging
 structlog==24.4.0
 

@@ -1,23 +1,25 @@
 """Container log access service.
 
-Runs commands on the VM via the configured VM_EXEC_PREFIX (default:
-``multipass exec ubuntu-vm --``) to list Docker containers and fetch logs.
+Connects to the VM via SSH (asyncssh) to list Docker containers and fetch logs.
+The VM host, user, and optional key path are configured via environment variables.
 """
 import asyncio
 import re
-import shlex
 from dataclasses import dataclass
+from pathlib import Path
 from urllib.parse import urlparse
+
+import asyncssh
 
 from app.config import settings
 from app.utils.logging import get_logger
 
 logger = get_logger(__name__)
 
-_SAFE_NAME = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._-]{0,199}$")
+_SAFE_NAME = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._/-]{0,199}$")
 
 FE_HINTS = frozenset(("frontend", "fe", "next", "react", "nginx", "web", "ui", "client"))
-BE_HINTS = frozenset(("backend", "be", "api", "fastapi", "flask", "django", "python", "uvicorn", "gunicorn", "server", "app"))
+BE_HINTS = frozenset(("backend", "be", "api", "fastapi", "flask", "django", "python", "uvicorn", "gunicorn", "server"))
 
 
 @dataclass
@@ -39,34 +41,47 @@ def _validate_container_name(name: str) -> bool:
     return bool(_SAFE_NAME.match(name))
 
 
-def _build_prefix() -> list[str]:
-    return shlex.split(settings.VM_EXEC_PREFIX)
-
-
-async def _exec(args: list[str], timeout: int = 15) -> tuple[str, str, int]:
-    """Run a command via the VM exec prefix and return (stdout, stderr, returncode)."""
-    full_cmd = _build_prefix() + args
-    logger.debug("container_exec", cmd=" ".join(full_cmd))
+async def _ssh_run(command: str, timeout: int = 15) -> tuple[str, str, int]:
+    """Run a command on the VM via SSH."""
     try:
-        proc = await asyncio.create_subprocess_exec(
-            *full_cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
-        return stdout.decode(errors="replace"), stderr.decode(errors="replace"), proc.returncode or 0
+        key_path = settings.VM_SSH_KEY_PATH
+        known_hosts = None
+
+        connect_kwargs: dict = {
+            "host": settings.VM_SSH_HOST,
+            "port": settings.VM_SSH_PORT,
+            "username": settings.VM_SSH_USER,
+            "known_hosts": known_hosts,
+        }
+
+        if key_path and Path(key_path).exists():
+            connect_kwargs["client_keys"] = [key_path]
+
+        async with asyncssh.connect(**connect_kwargs) as conn:
+            result = await asyncio.wait_for(
+                conn.run(command, check=False),
+                timeout=timeout,
+            )
+            return (
+                result.stdout or "",
+                result.stderr or "",
+                result.exit_status or 0,
+            )
     except asyncio.TimeoutError:
-        logger.warning("container_exec_timeout", cmd=" ".join(full_cmd))
-        return "", "Command timed out", 1
+        logger.warning("ssh_timeout", host=settings.VM_SSH_HOST, command=command[:80])
+        return "", "SSH command timed out", 1
+    except asyncssh.Error as e:
+        logger.error("ssh_error", host=settings.VM_SSH_HOST, error=str(e))
+        return "", f"SSH error: {e}", 1
     except Exception as e:
-        logger.error("container_exec_error", cmd=" ".join(full_cmd), error=str(e))
-        return "", str(e), 1
+        logger.error("ssh_connect_failed", host=settings.VM_SSH_HOST, error=str(e))
+        return "", f"Connection failed: {e}", 1
 
 
 async def list_containers() -> list[ContainerInfo]:
     """List all running Docker containers on the VM."""
-    fmt = "{{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}"
-    stdout, stderr, rc = await _exec(["docker", "ps", "--format", fmt])
+    fmt = "{{.Names}}\\t{{.Image}}\\t{{.Status}}\\t{{.Ports}}"
+    stdout, stderr, rc = await _ssh_run(f'docker ps --format "{fmt}"')
     if rc != 0:
         logger.warning("docker_ps_failed", stderr=stderr)
         return []
@@ -87,8 +102,8 @@ async def list_containers() -> list[ContainerInfo]:
 def _slug_from_url(base_url: str) -> str:
     """Extract a matchable slug from a base URL.
 
-    ``https://mtm-amplify-vm.ccrolabs.com`` → ``mtm-amplify``
-    ``https://asset-mgmt-vm.ccrolabs.com``  → ``asset-mgmt``
+    ``https://mtm-amplify-vm.ccrolabs.com`` -> ``mtm-amplify``
+    ``https://asset-mgmt-vm.ccrolabs.com``  -> ``asset-mgmt``
     """
     host = urlparse(base_url).hostname or ""
     parts = host.split(".")
@@ -117,11 +132,9 @@ async def discover_containers(base_url: str) -> ContainerMatch:
 
     all_containers = await list_containers()
 
-    # Broad match: container name contains the slug
     matches = [c for c in all_containers if slug in c.name.lower()]
 
     if not matches:
-        # Try partial: split slug on hyphens, match if all parts appear
         slug_parts = slug.split("-")
         if len(slug_parts) > 1:
             matches = [
@@ -142,11 +155,9 @@ async def discover_containers(base_url: str) -> ContainerMatch:
         elif role == "backend" and not be:
             be = c.name
 
-    # If only one container matched and no role was assigned, treat it as both
     if len(matches) == 1 and not fe and not be:
         be = matches[0].name
 
-    # If two+ matched but classification failed, pick alphabetically
     if not fe and not be and len(matches) >= 2:
         sorted_matches = sorted(matches, key=lambda c: c.name)
         fe = sorted_matches[0].name
@@ -167,16 +178,15 @@ async def fetch_logs(
     if not _validate_container_name(container_name):
         return "Invalid container name", False
 
-    args = ["docker", "logs", "--tail", str(tail), "--timestamps"]
+    cmd = f"docker logs --tail {tail} --timestamps"
     if since:
         safe_since = re.sub(r"[^0-9a-zA-Z.:TZ+_-]", "", since)
-        args.extend(["--since", safe_since])
-    args.append(container_name)
+        cmd += f" --since {safe_since}"
+    cmd += f" {container_name} 2>&1"
 
-    stdout, stderr, rc = await _exec(args, timeout=30)
+    stdout, stderr, rc = await _ssh_run(cmd, timeout=30)
 
-    # Docker writes some logs to stderr (especially for tty containers)
-    combined = stdout + stderr if stdout else stderr
+    combined = stdout if stdout else stderr
 
     if rc != 0 and not combined.strip():
         return f"Failed to fetch logs (exit code {rc})", False
