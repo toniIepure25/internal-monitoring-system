@@ -37,7 +37,7 @@ export default function DashboardPage() {
         const [groupsRes, incidentsRes, appsRes, hostsRes, subsRes, activityRes] = await Promise.all([
           api.get<{ items: UserGroup[] }>("/api/groups"),
           api.get<{ items: Incident[] }>("/api/incidents?limit=10"),
-          api.get<{ items: Application[]; total: number }>("/api/applications?limit=50"),
+          api.get<{ items: Application[]; total: number }>("/api/applications?limit=200"),
           api.get<{ items: Host[]; total: number }>("/api/hosts?limit=50").catch(() => ({ items: [], total: 0 })),
           api.get<{ items: unknown[]; total: number }>("/api/subscriptions").catch(() => ({ items: [], total: 0 })),
           api.get<{ items: ActivityItem[] }>("/api/activity?limit=15").catch(() => ({ items: [] })),
@@ -64,14 +64,13 @@ export default function DashboardPage() {
         setSubscriptionCount(subsRes.total || subsRes.items.length);
         setActivityItems(activityRes.items);
 
-        const visible = appsRes.items.slice(0, 8);
         const historyResults = await Promise.all(
-          visible.map((a) =>
+          appsRes.items.map((a) =>
             api.get<{ items: HealthCheckEntry[] }>(`/api/applications/${a.id}/health-history?limit=30`).catch(() => ({ items: [] }))
           )
         );
         const historyMap: Record<string, HealthCheckEntry[]> = {};
-        visible.forEach((a, i) => { historyMap[a.id] = historyResults[i].items; });
+        appsRes.items.forEach((a, i) => { historyMap[a.id] = historyResults[i].items; });
         setHealthHistory(historyMap);
       } catch { /* partial */ }
       setLoading(false);
@@ -125,8 +124,8 @@ export default function DashboardPage() {
                     <Link href="/applications" className="text-xs text-fgMuted hover:text-accent">View catalog →</Link>
                   </div>
                   {apps.length > 0 ? (
-                    <div className="divide-y divide-border">
-                      {apps.slice(0, 8).map((app) => (
+                    <div className="max-h-[520px] divide-y divide-border overflow-y-auto">
+                      {apps.map((app) => (
                         <Link key={app.id} href={`/applications/${app.id}`} className="flex items-center justify-between gap-3 px-4 py-2.5 transition-colors hover:bg-surfaceRaised/40">
                           <div className="min-w-0">
                             <p className="truncate text-[13px] font-medium text-fg">{app.display_name}</p>
