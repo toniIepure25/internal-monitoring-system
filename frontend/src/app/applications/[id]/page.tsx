@@ -44,6 +44,7 @@ export default function ApplicationDetailPage() {
   const [containerDraft, setContainerDraft] = useState({ frontend_container: "", backend_container: "" });
   const [savingContainer, setSavingContainer] = useState(false);
   const [showAllContainers, setShowAllContainers] = useState(false);
+  const [containerSearch, setContainerSearch] = useState("");
   const logEndRef = useRef<HTMLDivElement>(null);
 
   const reload = async () => {
@@ -354,19 +355,34 @@ export default function ApplicationDetailPage() {
                               {showAllContainers ? "Hide" : "Show"} all {containerDiscovery.all_containers.length} containers
                             </button>
                             {showAllContainers && (
-                              <div className="mt-2 max-h-48 space-y-1 overflow-y-auto">
-                                {containerDiscovery.all_containers.map((c) => (
-                                  <div key={c.name} className="flex items-center justify-between rounded px-2 py-1.5 text-[11px] hover:bg-surface">
-                                    <div className="min-w-0">
-                                      <p className="truncate font-mono font-medium text-fg">{c.name}</p>
-                                      <p className="truncate text-fgSubtle">{c.image}</p>
+                              <div className="mt-2">
+                                <input
+                                  type="text"
+                                  placeholder="Search containers…"
+                                  value={containerSearch}
+                                  onChange={(e) => setContainerSearch(e.target.value)}
+                                  className="mb-2 w-full rounded border border-border bg-canvas px-2 py-1.5 font-mono text-[11px] text-fg placeholder:text-fgSubtle outline-none focus:border-accent"
+                                />
+                                <div className="max-h-48 space-y-1 overflow-y-auto">
+                                  {containerDiscovery.all_containers
+                                    .filter((c) => {
+                                      if (!containerSearch) return true;
+                                      const q = containerSearch.toLowerCase();
+                                      return c.name.toLowerCase().includes(q) || c.image.toLowerCase().includes(q);
+                                    })
+                                    .map((c) => (
+                                    <div key={c.name} className="flex items-center justify-between rounded px-2 py-1.5 text-[11px] hover:bg-surface">
+                                      <div className="min-w-0">
+                                        <p className="truncate font-mono font-medium text-fg">{c.name}</p>
+                                        <p className="truncate text-fgSubtle">{c.image}</p>
+                                      </div>
+                                      <div className="flex shrink-0 gap-1">
+                                        <button type="button" onClick={() => handlePickContainer(c.name, "backend")} className="rounded bg-accent/10 px-1.5 py-0.5 text-[10px] font-medium text-accent hover:bg-accent/20">BE</button>
+                                        <button type="button" onClick={() => handlePickContainer(c.name, "frontend")} className="rounded bg-accent/10 px-1.5 py-0.5 text-[10px] font-medium text-accent hover:bg-accent/20">FE</button>
+                                      </div>
                                     </div>
-                                    <div className="flex shrink-0 gap-1">
-                                      <button type="button" onClick={() => handlePickContainer(c.name, "backend")} className="rounded bg-accent/10 px-1.5 py-0.5 text-[10px] font-medium text-accent hover:bg-accent/20">BE</button>
-                                      <button type="button" onClick={() => handlePickContainer(c.name, "frontend")} className="rounded bg-accent/10 px-1.5 py-0.5 text-[10px] font-medium text-accent hover:bg-accent/20">FE</button>
-                                    </div>
-                                  </div>
-                                ))}
+                                  ))}
+                                </div>
                               </div>
                             )}
                           </div>

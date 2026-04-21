@@ -125,12 +125,19 @@ apps = json.loads(apps_json).get('items', [])
 FE_HINTS = {'frontend', 'fe', 'next', 'react', 'nginx', 'web', 'ui', 'client'}
 BE_HINTS = {'backend', 'be', 'api', 'fastapi', 'flask', 'django', 'python', 'uvicorn', 'gunicorn', 'server', 'app'}
 
+# Manual overrides for apps whose container names don't match their URL slug
+SLUG_OVERRIDES = {
+    'signatures-ibc': 'signature-ibc',
+    'ibccif': 'ibc',
+}
+
 def slug_from_url(url):
     from urllib.parse import urlparse
     host = urlparse(url).hostname or ''
     slug = host.split('.')[0]
     slug = re.sub(r'-vm$', '', slug)
-    return slug.lower()
+    slug = slug.lower()
+    return SLUG_OVERRIDES.get(slug, slug)
 
 def classify(name, image):
     combined = f'{name} {image}'.lower()

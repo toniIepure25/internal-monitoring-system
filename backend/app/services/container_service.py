@@ -99,6 +99,12 @@ async def list_containers() -> list[ContainerInfo]:
     return containers
 
 
+_SLUG_OVERRIDES = {
+    "signatures-ibc": "signature-ibc",
+    "ibccif": "ibc",
+}
+
+
 def _slug_from_url(base_url: str) -> str:
     """Extract a matchable slug from a base URL.
 
@@ -109,7 +115,8 @@ def _slug_from_url(base_url: str) -> str:
     parts = host.split(".")
     slug = parts[0] if parts else host
     slug = re.sub(r"-vm$", "", slug)
-    return slug.lower()
+    slug = slug.lower()
+    return _SLUG_OVERRIDES.get(slug, slug)
 
 
 def _classify(name: str, image: str) -> str | None:
