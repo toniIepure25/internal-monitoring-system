@@ -193,9 +193,9 @@ printf "\n"
 # ── 4. Wait for discovery to complete ─────────────────────────────────────────
 if [[ ${#CREATED_IDS[@]} -gt 0 ]]; then
     printf "${CYAN}[4/4]${NC} Waiting for health endpoint discovery...\n"
-    printf "  ${DIM}Discovery runs automatically for new apps without a health URL.${NC}\n"
-    printf "  ${DIM}Waiting 8 seconds for probes to complete...${NC}\n\n"
-    sleep 8
+    printf "  ${DIM}Discovery crawls each app, checks for API specs, then probes endpoints.${NC}\n"
+    printf "  ${DIM}Waiting 15 seconds for discovery to complete...${NC}\n\n"
+    sleep 15
 
     for entry in "${CREATED_IDS[@]}"; do
         IFS='|' read -r app_id app_name <<< "$entry"
