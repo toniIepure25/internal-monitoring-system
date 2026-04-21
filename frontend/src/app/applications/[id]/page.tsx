@@ -33,24 +33,25 @@ export default function ApplicationDetailPage() {
   const [configDraft, setConfigDraft] = useState({ timeout_seconds: 0, slow_threshold_ms: 0, consecutive_failures_threshold: 0, consecutive_recovery_threshold: 0, monitoring_interval_seconds: 0 });
   const [savingConfig, setSavingConfig] = useState(false);
 
+  const reload = async () => {
+    try {
+      const [appRes, incRes, subsRes, histRes] = await Promise.all([
+        api.get<AppDetail>(`/api/applications/${params.id}`),
+        api.get<{ items: Incident[] }>(`/api/incidents?application_id=${params.id}&limit=20`),
+        api.get<{ items: Subscription[]; total: number }>(`/api/subscriptions?limit=200`),
+        api.get<{ items: HealthCheckEntry[] }>(`/api/applications/${params.id}/health-history?limit=100`).catch(() => ({ items: [] })),
+      ]);
+      setApp(appRes); setIncidents(incRes.items);
+      setSubscription(subsRes.items.find((s) => s.application_id === params.id) || null);
+      setHealthHistory(histRes.items);
+    } catch { /* noop */ }
+    setLoading(false);
+  };
+
   useEffect(() => {
-    async function load() {
-      try {
-        const [appRes, incRes, subsRes, histRes] = await Promise.all([
-          api.get<AppDetail>(`/api/applications/${params.id}`),
-          api.get<{ items: Incident[] }>(`/api/incidents?application_id=${params.id}&limit=20`),
-          api.get<{ items: Subscription[]; total: number }>(`/api/subscriptions?limit=200`),
-          api.get<{ items: HealthCheckEntry[] }>(`/api/applications/${params.id}/health-history?limit=100`).catch(() => ({ items: [] })),
-        ]);
-        setApp(appRes); setIncidents(incRes.items);
-        setSubscription(subsRes.items.find((s) => s.application_id === params.id) || null);
-        setHealthHistory(histRes.items);
-      } catch { /* noop */ }
-      setLoading(false);
-    }
     if (!params.id) return;
-    load();
-    const interval = window.setInterval(load, 10000);
+    reload();
+    const interval = window.setInterval(reload, 10000);
     return () => window.clearInterval(interval);
   }, [params.id]);
 
@@ -67,7 +68,13 @@ export default function ApplicationDetailPage() {
   const handleRediscover = async () => {
     if (!app) return;
     setRediscovering(true);
-    try { await api.post(`/api/applications/${app.id}/rediscover`); toast.info("Discovery started"); } catch (err: unknown) { toast.error(err instanceof Error ? err.message : "Failed"); }
+    try {
+      await api.post(`/api/applications/${app.id}/rediscover`);
+      toast.info("Discovering endpoints…");
+      await new Promise((r) => setTimeout(r, 3000));
+      await reload();
+      toast.success("Discovery complete");
+    } catch (err: unknown) { toast.error(err instanceof Error ? err.message : "Failed"); }
     setRediscovering(false);
   };
 
@@ -87,10 +94,10 @@ export default function ApplicationDetailPage() {
     if (!app) return;
     setSavingConfig(true);
     try {
-      const updated = await api.patch<AppDetail>(`/api/applications/${app.id}`, configDraft);
-      setApp({ ...app, ...updated, health_candidates: app.health_candidates });
+      await api.patch<AppDetail>(`/api/applications/${app.id}`, configDraft);
       toast.success("Configuration updated");
       setEditingConfig(false);
+      await reload();
     } catch (err: unknown) { toast.error(err instanceof Error ? err.message : "Failed to save"); }
     setSavingConfig(false);
   };
@@ -98,7 +105,13 @@ export default function ApplicationDetailPage() {
   const handleCheckNow = async () => {
     if (!app) return;
     setChecking(true);
-    try { await api.post(`/api/applications/${app.id}/check-now`); toast.success("Health check queued"); } catch (err: unknown) { toast.error(err instanceof Error ? err.message : "Failed"); }
+    try {
+      await api.post(`/api/applications/${app.id}/check-now`);
+      toast.info("Checking…");
+      await new Promise((r) => setTimeout(r, 2000));
+      await reload();
+      toast.success("Health check complete");
+    } catch (err: unknown) { toast.error(err instanceof Error ? err.message : "Failed"); }
     setChecking(false);
   };
 
@@ -117,9 +130,9 @@ export default function ApplicationDetailPage() {
   const handleSetHealthUrl = async (url: string) => {
     if (!app) return;
     try {
-      const updated = await api.patch<AppDetail>(`/api/applications/${app.id}/health-url`, { health_url: url });
-      setApp({ ...app, ...updated, health_candidates: app.health_candidates });
+      await api.patch<AppDetail>(`/api/applications/${app.id}/health-url`, { health_url: url });
       toast.success("Health URL updated");
+      await reload();
     } catch (err: unknown) { toast.error(err instanceof Error ? err.message : "Failed"); }
   };
 
@@ -229,25 +242,33 @@ export default function ApplicationDetailPage() {
           </div>
 
           <div className="space-y-4">
-            {app.health_candidates.length > 0 && (
+            {app.health_candidates.filter((c) => c.score > 0).length > 0 && (
               <SectionItem><Card>
                 <CardHeader><CardTitle>Health candidates</CardTitle></CardHeader>
                 <div className="divide-y divide-border">
-                  {app.health_candidates.sort((a, b) => b.score - a.score).map((c) => (
+                  {app.health_candidates
+                    .filter((c) => c.score > 0)
+                    .sort((a, b) => b.score - a.score)
+                    .map((c) => (
                     <div key={c.id} className="px-4 py-2.5">
                       <div className="flex items-center justify-between gap-2">
-                        <span className="truncate font-mono text-[11px] text-fgMuted">{c.url.replace(app.base_url, "")}</span>
-                        <span className={`text-[11px] font-semibold tabular-nums ${c.score >= 50 ? "text-success" : c.score > 0 ? "text-warning" : "text-fgSubtle"}`}>{c.score}</span>
+                        <span className="truncate font-mono text-[11px] text-fgMuted">{c.url.replace(app.base_url, "") || "/"}</span>
+                        <div className="flex items-center gap-1.5">
+                          {c.is_selected && <span className="rounded bg-accent/10 px-1.5 py-0.5 text-[10px] font-medium text-accent">Active</span>}
+                          <div className="flex h-1.5 w-12 overflow-hidden rounded-full bg-surfaceRaised">
+                            <div className={`h-full rounded-full ${c.score >= 60 ? "bg-success" : c.score >= 30 ? "bg-warning" : "bg-fgSubtle"}`} style={{ width: `${c.score}%` }} />
+                          </div>
+                          <span className={`text-[10px] font-semibold tabular-nums ${c.score >= 60 ? "text-success" : c.score >= 30 ? "text-warning" : "text-fgSubtle"}`}>{c.score}</span>
+                        </div>
                       </div>
-                      <div className="mt-1 flex flex-wrap items-center gap-1 text-[10px] text-fgSubtle">
-                        {c.http_status && <span>HTTP {c.http_status}</span>}
-                        {c.response_time_ms != null && <span className="tabular-nums">{c.response_time_ms}ms</span>}
-                        {c.is_json && <span className="text-accent">JSON</span>}
-                        {c.has_health_indicators && <span className="text-success">Health</span>}
-                        {c.is_selected && <span className="rounded bg-accent/10 px-1 text-accent">Selected</span>}
+                      <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[10px] text-fgSubtle">
+                        {c.http_status && <span className="rounded bg-surfaceRaised px-1 py-px">HTTP {c.http_status}</span>}
+                        {c.response_time_ms != null && <span className="rounded bg-surfaceRaised px-1 py-px tabular-nums">{c.response_time_ms}ms</span>}
+                        {c.is_json && <span className="rounded bg-accent/10 px-1 py-px text-accent">JSON</span>}
+                        {c.has_health_indicators && <span className="rounded bg-success/10 px-1 py-px text-success">Health data</span>}
                       </div>
-                      {!c.is_selected && c.score > 0 && (
-                        <button type="button" onClick={() => handleSetHealthUrl(c.url)} className="mt-1 text-[11px] font-medium text-accent hover:underline">Use this endpoint</button>
+                      {!c.is_selected && (
+                        <button type="button" onClick={() => handleSetHealthUrl(c.url)} className="mt-1.5 text-[11px] font-medium text-accent hover:underline">Use this endpoint</button>
                       )}
                     </div>
                   ))}

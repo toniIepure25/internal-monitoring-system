@@ -145,6 +145,8 @@ async def update_application(
 async def set_health_url(
     db: AsyncSession, app_id: UUID, health_url: str
 ) -> Optional[Application]:
+    from app.models.health_candidate import HealthCandidate
+
     result = await db.execute(
         select(Application)
         .options(selectinload(Application.status))
@@ -156,6 +158,13 @@ async def set_health_url(
 
     app.health_url = health_url
     app.detection_source = DetectionSource.MANUAL
+
+    candidates_result = await db.execute(
+        select(HealthCandidate).where(HealthCandidate.application_id == app_id)
+    )
+    for c in candidates_result.scalars().all():
+        c.is_selected = (c.url == health_url)
+
     await db.flush()
     logger.info("health_url_set", app_id=str(app_id), health_url=health_url)
     return app
