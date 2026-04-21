@@ -33,6 +33,13 @@ export default function ApplicationDetailPage() {
   const [configDraft, setConfigDraft] = useState({ timeout_seconds: 0, slow_threshold_ms: 0, consecutive_failures_threshold: 0, consecutive_recovery_threshold: 0, monitoring_interval_seconds: 0 });
   const [savingConfig, setSavingConfig] = useState(false);
 
+  // Redeploy state
+  const [redeploying, setRedeploying] = useState(false);
+  const [showRepoSetup, setShowRepoSetup] = useState(false);
+  const [repoDraft, setRepoDraft] = useState("");
+  const [savingRepo, setSavingRepo] = useState(false);
+  const [showDeployConfirm, setShowDeployConfirm] = useState(false);
+
   // Container logs state
   const [logTab, setLogTab] = useState<"backend" | "frontend">("backend");
   const [logTail, setLogTail] = useState(200);
@@ -210,6 +217,31 @@ export default function ApplicationDetailPage() {
     } catch (err: unknown) { toast.error(err instanceof Error ? err.message : "Failed"); }
   };
 
+  const handleSaveRepo = async () => {
+    if (!app || !repoDraft.trim()) return;
+    setSavingRepo(true);
+    try {
+      await api.patch(`/api/applications/${app.id}`, { github_repo: repoDraft.trim() });
+      toast.success("GitHub repo saved");
+      setShowRepoSetup(false);
+      await reload();
+      setShowDeployConfirm(true);
+    } catch (err: unknown) { toast.error(err instanceof Error ? err.message : "Failed to save"); }
+    setSavingRepo(false);
+  };
+
+  const handleRedeploy = async () => {
+    if (!app) return;
+    setShowDeployConfirm(false);
+    setRedeploying(true);
+    try {
+      const res = await api.post<{ message: string; actions_url: string | null }>(`/api/applications/${app.id}/redeploy?environment=VM`);
+      toast.success(res.message);
+      if (res.actions_url) window.open(res.actions_url, "_blank");
+    } catch (err: unknown) { toast.error(err instanceof Error ? err.message : "Deploy failed"); }
+    setRedeploying(false);
+  };
+
   if (loading) return <AppShell><div className="space-y-4"><div className="h-6 w-48 animate-pulse rounded bg-surfaceRaised" /><div className="h-[200px] animate-pulse rounded-lg bg-surfaceRaised" /><div className="h-[120px] animate-pulse rounded-lg bg-surfaceRaised" /></div></AppShell>;
   if (!app) return <AppShell><div className="rounded-lg bg-danger/10 px-4 py-3 text-[13px] text-danger">Application not found</div></AppShell>;
 
@@ -229,13 +261,65 @@ export default function ApplicationDetailPage() {
               </div>
               <p className="mt-0.5 text-xs text-fgMuted">{app.base_url}</p>
             </div>
-            <div className="flex shrink-0 gap-2">
+            <div className="flex shrink-0 flex-wrap gap-2">
               <Button onClick={handleCheckNow} disabled={checking} variant="secondary">{checking ? "…" : "Check now"}</Button>
               <Button onClick={handleSubscribe} disabled={subscribing}>{subscribing ? "…" : subscription ? "Unsubscribe" : "Subscribe"}</Button>
               <Button variant="secondary" onClick={handleRediscover} disabled={rediscovering}>{rediscovering ? "…" : "Re-discover"}</Button>
+              <Button
+                variant="secondary"
+                disabled={redeploying}
+                onClick={() => {
+                  if (!app.github_repo) { setRepoDraft(""); setShowRepoSetup(true); }
+                  else setShowDeployConfirm(true);
+                }}
+              >
+                {redeploying ? "…" : "Redeploy"}
+              </Button>
             </div>
           </div>
         </div>
+
+        {/* Deploy confirmation dialog */}
+        {showDeployConfirm && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setShowDeployConfirm(false)}>
+            <div className="mx-4 w-full max-w-sm rounded-lg bg-surface p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
+              <h3 className="text-sm font-semibold text-fg">Confirm Redeploy</h3>
+              <p className="mt-2 text-[13px] text-fgMuted">
+                This will trigger a rebuild and redeploy of <span className="font-medium text-fg">{app.display_name}</span> via GitHub Actions
+                {app.github_repo && <span> (repo: <code className="rounded bg-surfaceRaised px-1 py-0.5 text-[11px]">{app.github_repo}</code>)</span>}.
+              </p>
+              <div className="mt-4 flex justify-end gap-2">
+                <Button variant="secondary" onClick={() => setShowDeployConfirm(false)}>Cancel</Button>
+                <Button onClick={handleRedeploy}>Trigger Deploy</Button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Repo setup dialog */}
+        {showRepoSetup && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setShowRepoSetup(false)}>
+            <div className="mx-4 w-full max-w-sm rounded-lg bg-surface p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
+              <h3 className="text-sm font-semibold text-fg">Set GitHub Repository</h3>
+              <p className="mt-2 text-[13px] text-fgMuted">
+                Enter the GitHub repo name (just the repo, not the full URL). The org is configured server-side.
+              </p>
+              <input
+                type="text"
+                placeholder="e.g. quiktrip"
+                value={repoDraft}
+                onChange={(e) => setRepoDraft(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleSaveRepo()}
+                className="mt-3 w-full rounded border border-border bg-canvas px-3 py-2 text-sm text-fg placeholder:text-fgSubtle outline-none focus:border-accent"
+                autoFocus
+              />
+              <div className="mt-4 flex justify-end gap-2">
+                <Button variant="secondary" onClick={() => setShowRepoSetup(false)}>Cancel</Button>
+                <Button onClick={handleSaveRepo} disabled={!repoDraft.trim() || savingRepo}>{savingRepo ? "Saving…" : "Save & Deploy"}</Button>
+              </div>
+            </div>
+          </div>
+        )}
 
         <SectionStagger className="grid grid-cols-1 gap-4 lg:grid-cols-3">
           <div className="space-y-4 lg:col-span-2">
@@ -606,6 +690,65 @@ export default function ApplicationDetailPage() {
                 </CardContent>
               </Card></SectionItem>
             )}
+
+            <SectionItem><Card>
+              <CardHeader>
+                <CardTitle>Deployment</CardTitle>
+                {app.github_repo && (
+                  <button type="button" onClick={() => { setRepoDraft(app.github_repo || ""); setShowRepoSetup(true); }} className="text-[11px] font-medium text-accent hover:underline">Edit</button>
+                )}
+              </CardHeader>
+              <CardContent>
+                {app.github_repo ? (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] text-fgSubtle">GitHub repo</span>
+                      <a
+                        href={`https://github.com/computacenter-ro/${app.github_repo}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="rounded bg-surfaceRaised px-1.5 py-0.5 font-mono text-[11px] font-medium text-accent hover:underline"
+                      >
+                        {app.github_repo}
+                      </a>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] text-fgSubtle">Workflow</span>
+                      <span className="rounded bg-surfaceRaised px-1.5 py-0.5 font-mono text-[11px] font-medium tabular-nums text-fgMuted">ci.yml</span>
+                    </div>
+                    <div className="border-t border-border pt-3">
+                      <Button
+                        size="xs"
+                        className="w-full"
+                        onClick={() => setShowDeployConfirm(true)}
+                        disabled={redeploying}
+                      >
+                        {redeploying ? "Triggering…" : "Trigger Redeploy"}
+                      </Button>
+                      <a
+                        href={`https://github.com/computacenter-ro/${app.github_repo}/actions`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="mt-2 block text-center text-[10px] text-fgSubtle hover:text-accent"
+                      >
+                        View workflow runs on GitHub
+                      </a>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center">
+                    <p className="text-[11px] text-fgSubtle">No GitHub repo linked to this app yet.</p>
+                    <button
+                      type="button"
+                      onClick={() => { setRepoDraft(""); setShowRepoSetup(true); }}
+                      className="mt-2 text-[11px] font-medium text-accent hover:underline"
+                    >
+                      Set up deployment
+                    </button>
+                  </div>
+                )}
+              </CardContent>
+            </Card></SectionItem>
           </div>
         </SectionStagger>
       </PageTransition>

@@ -29,6 +29,10 @@ class Settings(BaseSettings):
     # Logging
     LOG_LEVEL: str = "INFO"
 
+    # GitHub (workflow redeploy)
+    GITHUB_TOKEN: str = ""
+    GITHUB_ORG: str = "computacenter-ro"
+
     # VM / Container access (SSH to the VM where app containers run)
     VM_SSH_HOST: str = "192.168.64.11"
     VM_SSH_USER: str = "ubuntu"

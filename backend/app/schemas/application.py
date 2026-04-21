@@ -18,6 +18,7 @@ class UpdateApplicationRequest(BaseModel):
     consecutive_failures_threshold: Optional[int] = Field(None, ge=1, le=20)
     consecutive_recovery_threshold: Optional[int] = Field(None, ge=1, le=10)
     slow_threshold_ms: Optional[int] = Field(None, ge=100, le=30000)
+    github_repo: Optional[str] = Field(None, max_length=200)
 
 
 class SetHealthUrlRequest(BaseModel):
@@ -68,6 +69,7 @@ class ApplicationResponse(BaseModel):
     slow_threshold_ms: int
     frontend_container: Optional[str] = None
     backend_container: Optional[str] = None
+    github_repo: Optional[str] = None
     created_at: str
     updated_at: str
     status: Optional[ApplicationStatusResponse] = None

@@ -11,7 +11,7 @@ from app.schemas.application import (
     ApplicationStatusResponse, HealthCandidateResponse,
     ContainerDiscoveryResponse, ContainerLogResponse, ContainerInfoResponse,
 )
-from app.services import application_service, discovery_service, container_service
+from app.services import application_service, discovery_service, container_service, github_service
 from app.database import async_session_factory
 from app.workers.scheduler import refresh_monitoring_job_for_application, remove_monitoring_job
 from app.services.monitoring_service import run_check_for_application
@@ -52,6 +52,7 @@ def _serialize_app(app, current_state_since: str | None = None) -> dict:
         "slow_threshold_ms": app.slow_threshold_ms,
         "frontend_container": app.frontend_container,
         "backend_container": app.backend_container,
+        "github_repo": app.github_repo,
         "created_at": app.created_at.isoformat() if app.created_at else "",
         "updated_at": app.updated_at.isoformat() if app.updated_at else "",
         "status": _serialize_status(
@@ -346,4 +347,39 @@ async def get_container_logs(
         "line_count": len(lines),
         "success": success,
         "error": None if success else log_text,
+    }
+
+
+# ── GitHub Workflow Redeploy ─────────────────────────────────────────────────
+
+@router.post("/{app_id}/redeploy", status_code=status.HTTP_202_ACCEPTED)
+async def trigger_redeploy(
+    app_id: UUID,
+    db: DbSession,
+    current_user: CurrentUser,
+    environment: str = Query("VM"),
+    ref: str = Query("main"),
+):
+    app = await application_service.get_application(db, app_id)
+    if not app:
+        raise HTTPException(status_code=404, detail="Application not found")
+
+    if not app.github_repo:
+        raise HTTPException(
+            status_code=400,
+            detail="No GitHub repo configured for this application. Set it first via the app settings.",
+        )
+
+    result = await github_service.trigger_workflow(
+        repo=app.github_repo,
+        ref=ref,
+        environment=environment,
+    )
+
+    if not result.success:
+        raise HTTPException(status_code=502, detail=result.message)
+
+    return {
+        "message": result.message,
+        "actions_url": result.actions_url,
     }

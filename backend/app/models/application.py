@@ -44,6 +44,7 @@ class Application(Base):
 
     frontend_container: Mapped[str | None] = mapped_column(String(200), nullable=True)
     backend_container: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    github_repo: Mapped[str | None] = mapped_column(String(200), nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_at: Mapped[datetime] = mapped_column(

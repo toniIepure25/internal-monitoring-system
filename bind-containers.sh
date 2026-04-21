@@ -20,6 +20,37 @@ ADMIN_EMAIL="${ADMIN_EMAIL:-admin@company.internal}"
 ADMIN_PASSWORD="${ADMIN_PASSWORD:-admin1234}"
 VM_NAME="${VM_NAME:-ubuntu-vm}"
 
+# ── Repo map: display name → GitHub repo name ────────────────────────────────
+# Used to auto-set github_repo for each app so Redeploy works out of the box.
+# Repo names are derived from URL slugs; edit if any don't match your actual repos.
+declare -A REPO_MAP=(
+  ["Signature IBC"]="signature-ibc"
+  ["Blueprint visualizer"]="blueprint-visualizer"
+  ["Portfolio"]="portfolio"
+  ["Learning Path"]="skillcentral"
+  ["Nvidia Blueprint Matcher"]="nvidiapass"
+  ["Sally Beauty"]="sallybeauty"
+  ["IBC Call Center"]="bankingcallcenter"
+  ["Admission Assistant"]="admissionassistant"
+  ["Asset Management"]="asset-mgmt"
+  ["Effy Jewelry"]="effy"
+  ["Google email/calendar chatbot"]="emailchatbot"
+  ["AF videotesting"]="videotesting"
+  ["CHOA"]="choa"
+  ["CanChat"]="canchat"
+  ["HealthChat"]="healthchat"
+  ["Digital Experience"]="digitalexperience"
+  ["ObservIQ"]="observeiq"
+  ["Data Synth"]="datasynth"
+  ["IBC Banking forecast"]="ibcbanking"
+  ["Cece panelist"]="cecepanelist"
+  ["QuikTrip"]="quiktrip"
+  ["Data Lakehouse visualizer"]="lakehouse-visualizer"
+  ["IBC CIF"]="ibccif"
+  ["SecOps DTNA"]="secops"
+  ["AiOps Vuln"]="ai-ops-platform"
+)
+
 # ── Colors ────────────────────────────────────────────────────────────────────
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -186,6 +217,7 @@ for app in apps:
         'be': be_name,
         'current_fe': app.get('frontend_container'),
         'current_be': app.get('backend_container'),
+        'github_repo': app.get('github_repo') or '',
     })
 
 print(json.dumps(results))
@@ -203,15 +235,22 @@ echo "$BIND_RESULT" | python3 -c "
 import sys, json
 results = json.loads(sys.stdin.read())
 for r in results:
-    print(f\"{r['id']}|{r['name']}|{r['fe'] or ''}|{r['be'] or ''}|{r['current_fe'] or ''}|{r['current_be'] or ''}|{r['match_count']}\")
-" | while IFS='|' read -r app_id app_name new_fe new_be cur_fe cur_be match_count; do
-    if [[ -z "$new_fe" && -z "$new_be" ]]; then
-        printf "  ${DIM}⊘ %-30s no matching containers (slug didn't match)${NC}\n" "$app_name"
+    print(f\"{r['id']}|{r['name']}|{r['fe'] or ''}|{r['be'] or ''}|{r['current_fe'] or ''}|{r['current_be'] or ''}|{r['match_count']}|{r['github_repo']}\")
+" | while IFS='|' read -r app_id app_name new_fe new_be cur_fe cur_be match_count cur_repo; do
+
+    # Resolve github_repo from REPO_MAP if not already set
+    REPO=""
+    if [[ -z "$cur_repo" ]] && [[ -n "${REPO_MAP[$app_name]+x}" ]]; then
+        REPO="${REPO_MAP[$app_name]}"
+    fi
+
+    if [[ -z "$new_fe" && -z "$new_be" && -z "$REPO" ]]; then
+        printf "  ${DIM}⊘ %-30s no matching containers${NC}\n" "$app_name"
         continue
     fi
 
-    # Skip if already bound to the same containers
-    if [[ "$new_fe" == "$cur_fe" && "$new_be" == "$cur_be" ]]; then
+    # Skip if already bound to the same containers and repo is set
+    if [[ "$new_fe" == "$cur_fe" && "$new_be" == "$cur_be" && -z "$REPO" ]]; then
         printf "  ${DIM}✓ %-30s already bound${NC}" "$app_name"
         [[ -n "$cur_be" ]] && printf " ${DIM}BE:%s${NC}" "$cur_be"
         [[ -n "$cur_fe" ]] && printf " ${DIM}FE:%s${NC}" "$cur_fe"
@@ -219,7 +258,7 @@ for r in results:
         continue
     fi
 
-    # Build PATCH body
+    # Build PATCH body for containers
     BODY="{}"
     if [[ -n "$new_fe" || -n "$new_be" ]]; then
         BODY=$(python3 -c "
@@ -233,18 +272,38 @@ print(json.dumps(d))
 ")
     fi
 
-    PATCH_RESP=$(curl -sf --max-time 10 \
-        -X PATCH "$API_URL/api/applications/$app_id/containers" \
-        -H "$AUTH" \
-        -H "Content-Type: application/json" \
-        -d "$BODY" 2>&1) && {
-        printf "  ${GREEN}✓ %-30s${NC}" "$app_name"
-        [[ -n "$new_be" ]] && printf " BE:${BOLD}%s${NC}" "$new_be"
-        [[ -n "$new_fe" ]] && printf " FE:${BOLD}%s${NC}" "$new_fe"
-        printf "\n"
-    } || {
-        printf "  ${RED}✗ %-30s bind failed${NC}\n" "$app_name"
-    }
+    # Patch containers
+    if [[ -n "$new_fe" || -n "$new_be" ]]; then
+        PATCH_RESP=$(curl -sf --max-time 10 \
+            -X PATCH "$API_URL/api/applications/$app_id/containers" \
+            -H "$AUTH" \
+            -H "Content-Type: application/json" \
+            -d "$BODY" 2>&1) && {
+            printf "  ${GREEN}✓ %-30s${NC}" "$app_name"
+            [[ -n "$new_be" ]] && printf " BE:${BOLD}%s${NC}" "$new_be"
+            [[ -n "$new_fe" ]] && printf " FE:${BOLD}%s${NC}" "$new_fe"
+        } || {
+            printf "  ${RED}✗ %-30s container bind failed${NC}" "$app_name"
+        }
+    else
+        printf "  ${DIM}· %-30s${NC}" "$app_name"
+    fi
+
+    # Patch github_repo if we have a new one
+    if [[ -n "$REPO" ]]; then
+        REPO_BODY=$(python3 -c "import json; print(json.dumps({'github_repo': '$REPO'}))")
+        curl -sf --max-time 10 \
+            -X PATCH "$API_URL/api/applications/$app_id" \
+            -H "$AUTH" \
+            -H "Content-Type: application/json" \
+            -d "$REPO_BODY" >/dev/null 2>&1 && {
+            printf " repo:${CYAN}%s${NC}" "$REPO"
+        } || {
+            printf " ${RED}repo-fail${NC}"
+        }
+    fi
+
+    printf "\n"
 done
 
 # ── Summary ───────────────────────────────────────────────────────────────────

@@ -35,6 +35,7 @@ export interface Application {
   slow_threshold_ms: number;
   frontend_container: string | null;
   backend_container: string | null;
+  github_repo: string | null;
   created_at: string;
   updated_at: string;
   status?: ApplicationStatusInfo;
