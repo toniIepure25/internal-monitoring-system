@@ -45,6 +45,7 @@ class ApplicationStatusResponse(BaseModel):
     last_http_status: Optional[int]
     consecutive_failures: int
     consecutive_successes: int
+    current_state_since: Optional[str] = None
 
     model_config = {"from_attributes": True}
 
