@@ -832,7 +832,7 @@ export default function ApplicationDetailPage() {
                     </div>
                   </div>
                 ) : (
-                  <div className="space-y-2 text-center">
+                  <div className="flex flex-col gap-2 text-center">
                     <p className="text-[11px] text-fgSubtle">No GitHub repo linked yet.</p>
                     <Button
                       size="xs"
